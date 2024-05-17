@@ -1,11 +1,11 @@
-# imf_reader
+# imf-reader
 
-A package to access IMF data
+A package to access imf data
 
 ## Installation
 
 ```bash
-$ pip install imf_reader
+$ pip install imf-reader
 ```
 
 ## Usage
