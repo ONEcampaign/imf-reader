@@ -2,6 +2,27 @@
 
 import pandas as pd
 import xml.etree.ElementTree as ET
+import requests
+from bs4 import BeautifulSoup
+
+
+BASE_URL = "https://www.imf.org/"
+
+
+def get_sdmx_url(month, year) -> str:
+    """Get the url to download the WEO data in SDMX format."""
+
+    url = f"{BASE_URL}/en/Publications/WEO/weo-database/{year}/{month}/download-entire-database"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
+    href = soup.find("a", string="SDMX Data").get("href")
+
+    return f"{BASE_URL}{href}"
+
+
+
+
+
 
 
 def parse_xml(tree: ET.ElementTree) -> pd.DataFrame:
