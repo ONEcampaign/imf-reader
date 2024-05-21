@@ -4,6 +4,8 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
+import io
+from zipfile import ZipFile
 
 
 BASE_URL = "https://www.imf.org/"
@@ -20,9 +22,13 @@ def get_sdmx_url(month, year) -> str:
     return f"{BASE_URL}{href}"
 
 
+def get_sdmx_folder(sdmx_url: str) -> ZipFile:
+    """download SDMX data files as a zip file object"""
 
+    response = requests.get(sdmx_url)
+    folder = ZipFile(io.BytesIO(response.content))
 
-
+    return folder
 
 
 def parse_xml(tree: ET.ElementTree) -> pd.DataFrame:
