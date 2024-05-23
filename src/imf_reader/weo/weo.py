@@ -1,11 +1,19 @@
-"""Module to read and process WEO data"""
+"""Module to read and process WEO data
+
+
+TODO: implement catch for corrupted zip file
+TODO: implement logging
+TODO: implement tests
+
+
+"""
 
 import pandas as pd
 import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
 import io
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 
 from imf_reader.config import NoDataError, UnexpectedFileError
 
@@ -19,6 +27,9 @@ FIELDS_TO_MAP = {
     "FREQ": "IMF.CL_FREQ.1.0",
     "SCALE": "IMF.CL_WEO_SCALE.1.0",
 }
+
+# numeric columns and the type to convert them to
+NUMERIC_COLUMNS = ["REF_AREA_CODE", "OBS_VALUE", "SCALE_CODE", "LASTACTUALDATE", "TIME_PERIOD"]
 
 
 def make_request(url: str) -> requests.models.Response:
@@ -37,7 +48,9 @@ def make_request(url: str) -> requests.models.Response:
             raise ConnectionError(
                 f"Could not connect to {url}. Status code: {response.status_code}"
             )
+
         return response
+
     except requests.exceptions.RequestException as e:
         raise ConnectionError(f"Could not connect to {url}. Error: {str(e)}")
 
@@ -74,6 +87,10 @@ class Parser:
 
         response = make_request(sdmx_url)
         folder = ZipFile(io.BytesIO(response.content))
+
+        # Validate the zip file
+        if folder.testzip():
+            raise BadZipFile("Corrupt zip file")
 
         return folder
 
@@ -141,13 +158,17 @@ class Parser:
     def check_folder(sdmx_folder: ZipFile) -> None:
         """Check that the folder contains the necessary files.
 
+        This method checks that there are only 2 files in the folder, an xml and xsd file.
+        If there are more/less than 2 files or if there is no xml/xsd file, an error is raised.
+        If the check passes, a message is logged.
+
         Args:
             sdmx_folder: The folder to check.
         """
 
         # if there are more than two files in the folder raise error
-        if len(sdmx_folder.namelist()) > 2:
-            raise UnexpectedFileError("More than two files in zip file")
+        if len(sdmx_folder.namelist()) != 2:
+            raise UnexpectedFileError("Unexpected number of files in zip file")
 
         # if there is no xml or xsd file in the folder raise error
         if not any(file.endswith(".xml") for file in sdmx_folder.namelist()):
@@ -155,11 +176,22 @@ class Parser:
         if not any(file.endswith(".xsd") for file in sdmx_folder.namelist()):
             raise UnexpectedFileError("XSD file not found in the folder")
 
-        # logger.info("Folder check passed")
+        # TODO: logger.info("Folder check passed")
 
     @staticmethod
-    def get_data(month, year) -> pd.DataFrame:
-        """Pipeline to get the data from the WEO database."""
+    def get_data(month: str, year: str | int) -> pd.DataFrame:
+        """Main pipeline to get the data from the WEO database.
+
+        This method will scrape the IMF website to retrieve the SDMX data files, parse the data and schema files,
+        clean the data and return a DataFrame with the WEO data.
+
+        Args:
+            month: The month of the data to download. Can be April or October.
+            year: The year of the data to download.
+
+        Returns:
+            A DataFrame with the WEO data.
+        """
 
         sdmx_url = Parser.get_sdmx_url(month, year)
         sdmx_folder = Parser.get_sdmx_folder(sdmx_url)
@@ -173,9 +205,14 @@ class Parser:
         data = Parser.parse_xml(data_tree)
 
         # clean the data
-        data = Parser.add_label_columns(data, schema_tree)
+        data = Parser.add_label_columns(data, schema_tree)  # add label columns
+        data[NUMERIC_COLUMNS] = data[NUMERIC_COLUMNS].apply(pd.to_numeric, errors="coerce")  # convert to numeric
 
         return data
+
+
+
+
 
 
 

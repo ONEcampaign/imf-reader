@@ -12,3 +12,4 @@ class UnexpectedFileError(Exception):
     or if there is an issue with the file structure"""
 
     pass
+
