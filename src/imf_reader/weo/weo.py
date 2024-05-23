@@ -1,10 +1,7 @@
 """Module to read and process WEO data
 
-
-TODO: implement catch for corrupted zip file
-TODO: implement logging
+TODO: default to latest version
 TODO: implement tests
-
 
 """
 
@@ -14,8 +11,9 @@ import requests
 from bs4 import BeautifulSoup
 import io
 from zipfile import ZipFile, BadZipFile
+from typing import Literal, Tuple
 
-from imf_reader.config import NoDataError, UnexpectedFileError
+from imf_reader.config import NoDataError, UnexpectedFileError, logger
 
 
 BASE_URL = "https://www.imf.org/"
@@ -75,6 +73,7 @@ class Parser:
         if href is None:
             raise NoDataError("SDMX Data link not found")
 
+        logger.debug("SDMX URL found")
         return f"{BASE_URL}{href}"
 
     @staticmethod
@@ -92,6 +91,7 @@ class Parser:
         if folder.testzip():
             raise BadZipFile("Corrupt zip file")
 
+        logger.debug("Zip folder downloaded successfully")
         return folder
 
     @staticmethod
@@ -111,6 +111,7 @@ class Parser:
             for obs in series:
                 rows.append({**series.attrib, **obs.attrib})
 
+        logger.debug("XML parsed successfully")
         return pd.DataFrame(rows)
 
     @staticmethod
@@ -152,31 +153,26 @@ class Parser:
             data_df[f"{column}_LABEL"] = data_df[column].map(mapper)
             data_df.rename(columns={column: f"{column}_CODE"}, inplace=True)
 
+        logger.debug(".xsd schema parsed and columns added successfully")
         return data_df
 
     @staticmethod
     def check_folder(sdmx_folder: ZipFile) -> None:
         """Check that the folder contains the necessary files.
 
-        This method checks that there are only 2 files in the folder, an xml and xsd file.
-        If there are more/less than 2 files or if there is no xml/xsd file, an error is raised.
-        If the check passes, a message is logged.
+        This method checks that there is only 1 xml and 1 xsd file in the folder.
 
         Args:
             sdmx_folder: The folder to check.
         """
 
-        # if there are more than two files in the folder raise error
-        if len(sdmx_folder.namelist()) != 2:
-            raise UnexpectedFileError("Unexpected number of files in zip file")
+        if len([file for file in sdmx_folder.namelist() if file.endswith(".xml")]) != 1:
+            raise UnexpectedFileError("There should be exactly one xml file in the folder")
 
-        # if there is no xml or xsd file in the folder raise error
-        if not any(file.endswith(".xml") for file in sdmx_folder.namelist()):
-            raise UnexpectedFileError("XML file not found in the folder")
-        if not any(file.endswith(".xsd") for file in sdmx_folder.namelist()):
-            raise UnexpectedFileError("XSD file not found in the folder")
+        if len([file for file in sdmx_folder.namelist() if file.endswith(".xsd")]) != 1:
+            raise UnexpectedFileError("There should be exactly one xsd file in the folder")
 
-        # TODO: logger.info("Folder check passed")
+        logger.debug("Zip folder check passed")
 
     @staticmethod
     def get_data(month: str, year: str | int) -> pd.DataFrame:
@@ -208,7 +204,43 @@ class Parser:
         data = Parser.add_label_columns(data, schema_tree)  # add label columns
         data[NUMERIC_COLUMNS] = data[NUMERIC_COLUMNS].apply(pd.to_numeric, errors="coerce")  # convert to numeric
 
+        logger.debug("Data successfully retrieved and cleaned")
         return data
+
+
+def validate_version_month(month: str) -> str:
+    """Checks that the month is April or October
+    removes whitespace and converts to sentence case
+
+    Args:
+        month: The month to validate
+
+    Returns:
+        The validated month
+    """
+
+    # clean string - remove whitespace and convert to sentence case
+    month = month.strip().capitalize()
+
+    if month not in ["April", "October"]:
+        raise TypeError("Invalid month. Must be `April` or `October`")
+
+    return month
+
+
+def fetch_weo(version: Tuple[Literal["April", "October"], int]) -> pd.DataFrame:
+    """Fetch WEO data from the IMF website"""
+
+    month, year = version
+    month = validate_version_month(month)
+    df = Parser.get_data(month, year)
+
+    logger.info(f"WEO version {month} {year} data fetched successfully")
+    return df
+
+
+
+
 
 
 
