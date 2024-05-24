@@ -300,6 +300,16 @@ def fetch_data(version: Tuple[Literal["April", "October"], int] | str = "latest"
                 return df
             except NoDataError:
                 raise NoDataError(f"No data found for expected versions {version} and {roll_back_version(version)}")
+            except UnexpectedFileError:
+                raise UnexpectedFileError(f"Unable to parse data for version {version[0]} {version[1]}")
+            except Exception as e:
+                raise e
+
+        # Any other error, raise it
+        except UnexpectedFileError:
+            raise UnexpectedFileError(f"Unable to parse data for version {version[0]} {version[1]}")
+        except Exception as e:
+            raise e
 
     else:
         try:
@@ -308,6 +318,10 @@ def fetch_data(version: Tuple[Literal["April", "October"], int] | str = "latest"
             return df
         except NoDataError:
             raise NoDataError(f"No data found for version {version[0]} {version[1]}")
+        except UnexpectedFileError:
+            raise UnexpectedFileError(f"Unable to parse data for version {version[0]} {version[1]}")
+        except Exception as e:
+            raise e
 
 
 
