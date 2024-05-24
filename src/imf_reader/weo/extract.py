@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import io
 from zipfile import ZipFile, BadZipFile
 from typing import Literal, Tuple
+from datetime import datetime
 
 from imf_reader.config import NoDataError, UnexpectedFileError, logger
 
@@ -228,15 +229,85 @@ def validate_version_month(month: str) -> str:
     return month
 
 
-def fetch_weo(version: Tuple[Literal["April", "October"], int]) -> pd.DataFrame:
-    """Fetch WEO data from the IMF website"""
+def gen_latest_version() -> Tuple[Literal["April", "October"], int]:
+    """Generates the latest expected version based on the current date as a tuple of month and year"""
 
-    month, year = version
-    month = validate_version_month(month)
-    df = Parser.get_data(month, year)
+    current_year = datetime.now().year
+    current_month = datetime.now().month
 
-    logger.info(f"WEO version {month} {year} data fetched successfully")
-    return df
+    # if month is less than 4 (April) return the version 2 (October) for the previous year
+    if current_month < 4:
+        return "October", current_year - 1
+
+    # elif month is less than 10 (October) return current year and version 2 (April)
+    elif current_month < 10:
+        return "April", current_year
+
+    # else (if month is more than 10 (October) return current month and version 2 (October)
+    else:
+        return "October", current_year
+
+
+def roll_back_version(version: Tuple[Literal["April", "October"], int]) -> Tuple[Literal["April", "October"], int]:
+    """Roll back version to the previous version
+
+    Args:
+        version: The version to roll back
+
+    Returns:
+        The rolled back version
+    """
+
+    if version[0] == "October":
+        logger.info(f"Rolling back version to April {version[1]}")
+        return "April", version[1]
+
+    elif version[0] == "April":
+        logger.info(f"Rolling back version to October {version[1] - 1}")
+        return "October", version[1] - 1
+
+    else:
+        raise ValueError(f"Invalid version: {version}")
+
+
+def fetch_data(version: Tuple[Literal["April", "October"], int] | str = "latest") -> pd.DataFrame:
+    """Fetch WEO data from the IMF website
+
+    Args:
+        version: The version of the WEO data to fetch as a tuple of month and year. Valid months are 'April' and 'October'.
+        If no version is provided, the latest version will be fetched.
+
+    Returns:
+        A pandas DataFrame with the WEO data.
+    """
+
+    if isinstance(version, str):
+        if version != "latest":
+            raise ValueError("Invalid version. Must be a tuple or 'latest'")
+        version = gen_latest_version()
+        try:
+            df = Parser.get_data(*version)
+            logger.info(f"Latest WEO version {version[0]} {version[1]} data fetched successfully")
+            return df
+
+        # If no data is found, roll back version only once and if no data is found again, raise NoDataError
+        except NoDataError:
+            logger.warning(f"No data found for expected latest version {version[0]} {version[1]}")
+            version = roll_back_version(version)
+            try:
+                df = Parser.get_data(*version)
+                logger.info(f"WEO version {version[0]} {version[1]} data fetched successfully")
+                return df
+            except NoDataError:
+                raise NoDataError(f"No data found for expected versions {version} and {roll_back_version(version)}")
+
+    else:
+        try:
+            df = Parser.get_data(validate_version_month(version[0]), version[1])
+            logger.info(f"WEO version {version[0]} {version[1]} data fetched successfully")
+            return df
+        except NoDataError:
+            raise NoDataError(f"No data found for version {version[0]} {version[1]}")
 
 
 
