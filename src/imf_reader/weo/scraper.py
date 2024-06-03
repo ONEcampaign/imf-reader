@@ -67,11 +67,13 @@ class SDMXScraper:
             The url to download the SDMX data.
         """
 
-        href = soup.find("a", string="SDMX Data").get("href")
+        try:
+            href = soup.find("a", string="SDMX Data").get("href")
+        except AttributeError:
+            raise NoDataError("SDMX data not found")
 
-        # Check if a href is not found
         if href is None:
-            raise NoDataError("SDMX Data link not found")
+            raise NoDataError("SDMX data not found")
 
         logger.debug("SDMX URL found")
         return f"{BASE_URL}{href}"
