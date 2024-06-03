@@ -2,11 +2,9 @@
 
 import pandas as pd
 import xml.etree.ElementTree as ET
-from zipfile import ZipFile, BadZipFile
-from typing import Literal, Tuple
-import numpy as np
+from zipfile import ZipFile
 
-from imf_reader.config import NoDataError, UnexpectedFileError, logger
+from imf_reader.config import UnexpectedFileError, logger
 
 SDMX_FIELDS_TO_MAP = {
     "UNIT": "IMF.CL_WEO_UNIT.1.0",
@@ -15,20 +13,6 @@ SDMX_FIELDS_TO_MAP = {
     "FREQ": "IMF.CL_FREQ.1.0",
     "SCALE": "IMF.CL_WEO_SCALE.1.0",
 }
-
-TAB_COL_MAPPER = {'WEO Country Code': "REF_AREA_CODE",
-                      'ISO': "ISO_CODE",
-                      'WEO Subject Code': "CONCEPT_CODE",
-                      'Country': "REF_AREA_LABEL",
-                      'Subject Descriptor': "CONCEPT_LABEL",
-                      'Subject Notes': "CONCEPT_NOTES",
-                      'Units': "UNIT",
-                      'Scale': "SCALE_LABEL",
-                      "Estimates Start After": "LASTACTUALDATE",
-                      "Country/Series-specific Notes": "NOTES",
-                      "WEO Country Group Code": "REF_AREA_CODE",
-                      "Country Group Name": "REF_AREA_LABEL"
-                      }
 
 # numeric columns and the type to convert them to
 SDMX_NUMERIC_COLUMNS = ["REF_AREA_CODE", "OBS_VALUE", "SCALE_CODE", "LASTACTUALDATE", "TIME_PERIOD"]
@@ -142,42 +126,8 @@ class SDMXParser:
         data[SDMX_NUMERIC_COLUMNS] = data[SDMX_NUMERIC_COLUMNS].apply(pd.to_numeric,
                                                                       errors="coerce")  # convert to numeric
 
-        logger.debug("Data successfully retrieved and cleaned")
+        logger.debug("Data successfully parsed")
         return data
 
 
-class TabParser:
-    """Class to parse the WEO tabular data"""
-
-    @staticmethod
-    def remove_footnote(df: pd.DataFrame) -> pd.DataFrame:
-        """Remove the footnote from the DataFrame."""
-
-        if "International Monetary Fund" in df.iloc[-1, 0]:
-            return df.iloc[:-1]
-        return df
-
-    @staticmethod
-    def remove_unwanted_cols(df: pd.DataFrame) -> pd.DataFrame:
-        """Remove unwanted columns from the DataFrame such as any null unnamed columns."""
-        return df.loc[:, ~df.columns.str.contains('^Unnamed')]
-
-    @staticmethod
-    def clean_value_col(df: pd.DataFrame) -> pd.DataFrame:
-        """Clean the value column by removing commas, fixing nulls and converting to numeric."""
-
-        df["OBS_VALUE"] = pd.to_numeric(df["OBS_VALUE"].str.replace(",", "").replace('--', np.nan))
-        return df
-
-    @staticmethod
-    def clean_country_data(df):
-        """ """
-
-        (df
-         .pipe(TabParser.remove_footnote)
-         .pipe(TabParser.remove_unwanted_cols)
-         .rename(columns = TAB_COL_MAPPER) # rename columns
-         .melt(id_vars = TAB_COL_MAPPER.values(), var_name = "TIME_PERIOD", value_name="OBS_VALUE")  # melt to long
-         .pipe(TabParser.clean_value_col)  # clean the value column
-         )
 
