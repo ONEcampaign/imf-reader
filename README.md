@@ -4,7 +4,8 @@
 
 # imf-reader
 
-A package to access imf data
+A package to access IMF data. For the moment this package only supports access to the World Economic Outlook (WEO) database.
+Support for other IMF data and databases may be added in the future.
 
 ## Installation
 
@@ -14,7 +15,28 @@ $ pip install imf-reader
 
 ## Usage
 
-- TODO
+This package has very basic functionality only to retrieve WEO data as a pandas DataFrame. 
+To use it, import the `weo` module and call the `fetch_data` function.
+
+```python
+from imf_reader import weo
+
+df = weo.fetch_data()
+print(df)
+
+```
+
+By default, the function will return the WEO data for the latest year available.
+You can specify a version by passing the month and year of the version you want to retrieve.
+NOTE: The WEO reports are released in April and October of each year. The month of the version must 
+be either "April" or "October".
+
+```python
+df = weo.fetch_data(version=("April", 2020))
+```
+
+For more advanced usage and tools please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
+
 
 ## Contributing
 
