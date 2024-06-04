@@ -130,27 +130,21 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
         A pandas DataFrame containing the WEO data
     """
 
-    # If the latest version is requested try to find the latest version data
-    if version is None:
-        latest_version = gen_latest_version()
+    # if version is passed, validate it and fetch the data
+    if version is not None:
+        version = validate_version(version)
+        df = _fetch(version)
+        logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
+        return df
 
-        # try to scrape the data for the expected latest version
-        try:
-            df = _fetch(latest_version)
-            logger.info(f"Data fetched successfully for the latest version {latest_version[0]} {latest_version[1]}")
-            return df
+    # if no version is passed, generate the latest version and fetch the data
+    latest_version = gen_latest_version()
+    try:
+        return fetch_data(latest_version)
 
-        # if no data is found for the version, roll back once and try again
-        except NoDataError:
-            logger.debug(f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
-                         f" Rolling back version")
-            latest_version = roll_back_version(latest_version)
-            df = _fetch(latest_version)
-            logger.info(f"Data fetched successfully for version {latest_version[0]} {latest_version[1]}")
-            return df
-
-    # if a version is provided, validate the version and try fetch the data for that version
-    version = validate_version(version)
-    df = _fetch(version)
-    logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
-    return df
+    # if no data is found for the expected latest version, roll back once and try again
+    except NoDataError:
+        logger.debug(f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
+                     f" Rolling back version")
+        latest_version = roll_back_version(latest_version)
+        return fetch_data(latest_version)
