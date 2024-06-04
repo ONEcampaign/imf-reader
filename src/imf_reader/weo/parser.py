@@ -121,10 +121,13 @@ class SDMXParser:
         # Parse the data
         data = SDMXParser.parse_xml(data_tree)
 
-        # clean the data
-        data = SDMXParser.add_label_columns(data, schema_tree)  # add label columns
-        data[SDMX_NUMERIC_COLUMNS] = data[SDMX_NUMERIC_COLUMNS].apply(pd.to_numeric,
-                                                                      errors="coerce")  # convert to numeric
+        # add label columns
+        data = SDMXParser.add_label_columns(data, schema_tree)
+        # convert to numeric
+        data[SDMX_NUMERIC_COLUMNS] = (data[SDMX_NUMERIC_COLUMNS]
+                                      .replace(["n/a", "--"], pd.NA, inplace=True)
+                                      .apply(pd.to_numeric)
+                                      )
 
         logger.debug("Data successfully parsed")
         return data
