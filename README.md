@@ -35,7 +35,16 @@ be either "April" or "October".
 df = weo.fetch_data(version=("April", 2020))
 ```
 
-For more advanced usage and tools please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
+Caching is used to avoid multiple requests to the IMF website for the same data and to enhance performance. 
+Caching using the LRU (Least Recently Used) algorithm approach and stores data in RAM. The cache is cleared when the program is terminated.
+To clear the cache manually, use the `clear_cache` function.
+
+```python
+weo.clear_cache()
+```
+
+
+For more advanced usage and tools for WEO data please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
 
 
 ## Contributing

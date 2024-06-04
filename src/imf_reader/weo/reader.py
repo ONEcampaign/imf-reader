@@ -1,37 +1,50 @@
 """Main interface to the WEO database."""
 
 from datetime import datetime
-from typing import Literal, Tuple
+from typing import Literal, Tuple, Optional
 import pandas as pd
+from functools import lru_cache
 
 from imf_reader.weo.scraper import SDMXScraper
 from imf_reader.weo.parser import SDMXParser
 from imf_reader.config import logger, NoDataError
 
+ValidMonths = Literal["April", "October"]  # Type hint for valid months
+Version = Tuple[ValidMonths, int]  # Type hint for version as a tuple of month and year
 
-def validate_version_month(month: str) -> str:
-    """Checks that the month is April or October and returns the validated month.
 
-    Removes whitespace and converts to sentence case before validation. Any other misspellings, invalid months,
-    or variations will raise a TypeError.
+def validate_version(version: Tuple) -> Version:
+    """Validate the version
+
+    Make sure that it is a tuple of month and year and the month is either April or October.
 
     Args:
-        month: The month to validate
+        version: The version to validate
 
     Returns:
-        The validated month
+        A tuple of the month and year
     """
 
-    # clean string - remove whitespace and convert to sentence case
-    month = month.strip().capitalize()
+    if not isinstance(version, tuple) or len(version) != 2:
+        raise TypeError("Invalid version. Must be a tuple of month ('April' or 'October') and year")
 
+    # check that the month is either April or October
+    month = version[0].strip().capitalize()
     if month not in ["April", "October"]:
         raise TypeError("Invalid month. Must be `April` or `October`")
 
-    return month
+    # check that the year is an integer. If it is not try to make it an integer
+    year = version[1]
+    if not isinstance(year, int):
+        try:
+            year = int(year)
+        except ValueError:
+            raise TypeError("Invalid year. Must be an integer")
+
+    return month, year
 
 
-def gen_latest_version() -> Tuple[Literal["April", "October"], int]:
+def gen_latest_version() -> Version:
     """Generates the latest expected version based on the current date as a tuple of month and year
 
     Returns:
@@ -54,7 +67,7 @@ def gen_latest_version() -> Tuple[Literal["April", "October"], int]:
         return "October", current_year
 
 
-def roll_back_version(version: Tuple[Literal["April", "October"], int]) -> Tuple[Literal["April", "October"], int]:
+def roll_back_version(version: Version) -> Version:
     """Roll back version to the previous version
 
     This function rolls back the version passed to the expected previous version. If the version is April 2024
@@ -79,42 +92,65 @@ def roll_back_version(version: Tuple[Literal["April", "October"], int]) -> Tuple
         raise ValueError(f"Invalid version: {version}")
 
 
-def fetch_data(version: Tuple[Literal["April", "October"]] | str = "latest") -> pd.DataFrame:
-    """ """
+@lru_cache
+def _fetch(version: Version) -> pd.DataFrame:
+    """Helper function which handles caching and fetching the data from the IMF website"""
 
-    # if no version is provided or "latest" is passed, get the latest version
-    # include roll back logic
-    if version == "latest":
-        version = gen_latest_version()
-
-        # try to scrape the data for the latest version
-        try:
-            folder = SDMXScraper.scrape(*version)
-            df = SDMXParser.parse(folder)
-            logger.info(f"Data fetched successfully for the latest version {version[0]} {version[1]}")
-            return df
-
-        # if no data is found for the version, roll back and try again
-        except NoDataError:
-            logger.debug(f"No data found for the expected latest version {version[0]} {version[1]}."
-                         f" Rolling back version")
-
-            version = roll_back_version(version)
-            folder = SDMXScraper.scrape(*version)
-            df = SDMXParser.parse(folder)
-            logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
-            return df
-
-    # if a version is provided, try fetch the data for that version
-    version = validate_version_month(version[0]), version[1]
-    folder = SDMXScraper.scrape(*version)
-    df = SDMXParser.parse(folder)
-    logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
+    folder = SDMXScraper.scrape(*version)  # scrape the data and get the SDMX files
+    df = SDMXParser.parse(folder)  # parse the SDMX files into a DataFrame
+    logger.debug(f"Data scraped and parsed successfully for version {version[0]} {version[1]}")
     return df
 
 
+def clear_cache():
+    """Clears the cache for any WEO data fetched by the `fetch_data` function."""
+
+    _fetch.cache_clear()
+    logger.info("Cache cleared")
 
 
+def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
+    """Fetch WEO data
 
+    By default, this function fetched data for the latest WEO publication. If a specific publication version
+    is required, the version can be passed as a tuple of month and year. WEO data is released in April and October
+    each year. For the version month, the month must be either "April" or "October"
+    This function caches the data for faster access and to prevent multiple requests to the IMF website. To clear the
+    cache, use the `clear_cache` function.
 
+    e.g.
+    >>> fetch_data() # fetches the latest data
+    >>> fetch_data(("April", 2024)) # fetches the data for April 2024
 
+    Args:
+        version: The version of the WEO data to fetch as a tuple eg `("April", 2023).
+                 By default, the latest version is fetched.
+
+    Returns:
+        A pandas DataFrame containing the WEO data
+    """
+
+    # If the latest version is requested try to find the latest version data
+    if version is None:
+        latest_version = gen_latest_version()
+
+        # try to scrape the data for the expected latest version
+        try:
+            df = _fetch(latest_version)
+            logger.info(f"Data fetched successfully for the latest version {latest_version[0]} {latest_version[1]}")
+            return df
+
+        # if no data is found for the version, roll back once and try again
+        except NoDataError:
+            logger.debug(f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
+                         f" Rolling back version")
+            latest_version = roll_back_version(latest_version)
+            df = _fetch(latest_version)
+            logger.info(f"Data fetched successfully for version {latest_version[0]} {latest_version[1]}")
+            return df
+
+    # if a version is provided, validate the version and try fetch the data for that version
+    version = validate_version(version)
+    df = _fetch(version)
+    logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
+    return df
