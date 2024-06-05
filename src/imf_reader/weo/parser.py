@@ -6,6 +6,7 @@ from zipfile import ZipFile
 
 from imf_reader.config import UnexpectedFileError, logger
 
+# columns to map to labels and the schema element to look them up
 SDMX_FIELDS_TO_MAP = {
     "UNIT": "IMF.CL_WEO_UNIT.1.0",
     "CONCEPT": "IMF.CL_WEO_CONCEPT.1.0",
@@ -15,11 +16,19 @@ SDMX_FIELDS_TO_MAP = {
 }
 
 # numeric columns and the type to convert them to
-SDMX_NUMERIC_COLUMNS = ["REF_AREA_CODE", "OBS_VALUE", "SCALE_CODE", "LASTACTUALDATE", "TIME_PERIOD"]
+SDMX_NUMERIC_COLUMNS = [
+    "REF_AREA_CODE",
+    "OBS_VALUE",
+    "SCALE_CODE",
+    "LASTACTUALDATE",
+    "TIME_PERIOD",
+]
 
 
 class SDMXParser:
-    """Class to parse SDMX data"""
+    """Class to parse SDMX data
+    To use this class, call the parse method with the folder containing the SDMX files.
+    """
 
     @staticmethod
     def parse_xml(tree: ET.ElementTree) -> pd.DataFrame:
@@ -42,7 +51,9 @@ class SDMXParser:
         return pd.DataFrame(rows)
 
     @staticmethod
-    def lookup_schema_element(schema_tree: ET.ElementTree, field_name) -> dict[str, str]:
+    def lookup_schema_element(
+        schema_tree: ET.ElementTree, field_name
+    ) -> dict[str, str]:
         """Lookup the elements in the schema and find the label for a given label_name.
 
         Args:
@@ -64,7 +75,9 @@ class SDMXParser:
         return lookup_dict
 
     @staticmethod
-    def add_label_columns(data_df: pd.DataFrame, schema_tree: ET.ElementTree) -> pd.DataFrame:
+    def add_label_columns(
+        data_df: pd.DataFrame, schema_tree: ET.ElementTree
+    ) -> pd.DataFrame:
         """Maps columns with codes to columns with labels and renames the code columns.
 
         Args:
@@ -94,12 +107,30 @@ class SDMXParser:
         """
 
         if len([file for file in sdmx_folder.namelist() if file.endswith(".xml")]) != 1:
-            raise UnexpectedFileError("There should be exactly one xml file in the folder")
+            raise UnexpectedFileError(
+                "There should be exactly one xml file in the folder"
+            )
 
         if len([file for file in sdmx_folder.namelist() if file.endswith(".xsd")]) != 1:
-            raise UnexpectedFileError("There should be exactly one xsd file in the folder")
+            raise UnexpectedFileError(
+                "There should be exactly one xsd file in the folder"
+            )
 
         logger.debug("Zip folder check passed")
+
+    @staticmethod
+    def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Cleans the numeric columns
+
+        Replaces "n/a" and "--" with pd.NA and converts the columns to numeric.
+
+        """
+
+        df[SDMX_NUMERIC_COLUMNS] = (
+            df[SDMX_NUMERIC_COLUMNS].replace(["n/a", "--"], pd.NA).apply(pd.to_numeric)
+        )
+
+        return df
 
     @staticmethod
     def parse(sdmx_folder: ZipFile) -> pd.DataFrame:
@@ -115,22 +146,21 @@ class SDMXParser:
         SDMXParser.check_folder(sdmx_folder)
 
         # Get the data and schema trees
-        data_tree = ET.parse(sdmx_folder.open([file for file in sdmx_folder.namelist() if file.endswith(".xml")][0]))
-        schema_tree = ET.parse(sdmx_folder.open([file for file in sdmx_folder.namelist() if file.endswith(".xsd")][0]))
+        data_tree = ET.parse(
+            sdmx_folder.open(
+                [file for file in sdmx_folder.namelist() if file.endswith(".xml")][0]
+            )
+        )
+        schema_tree = ET.parse(
+            sdmx_folder.open(
+                [file for file in sdmx_folder.namelist() if file.endswith(".xsd")][0]
+            )
+        )
 
-        # Parse the data
-        data = SDMXParser.parse_xml(data_tree)
-
-        # add label columns
-        data = SDMXParser.add_label_columns(data, schema_tree)
-        # convert to numeric
-        data[SDMX_NUMERIC_COLUMNS] = (data[SDMX_NUMERIC_COLUMNS]
-                                      .replace(["n/a", "--"], pd.NA, inplace=True)
-                                      .apply(pd.to_numeric)
-                                      )
+        # Parse and clean the data
+        data = SDMXParser.parse_xml(data_tree)  # Parse the xml data
+        data = SDMXParser.add_label_columns(data, schema_tree)  # add label columns
+        data = SDMXParser.clean_numeric_columns(data)  # convert to numeric
 
         logger.debug("Data successfully parsed")
         return data
-
-
-

@@ -121,7 +121,3 @@ class SDMXScraper:
         sdmx_folder = SDMXScraper.get_sdmx_folder(sdmx_url)
 
         return sdmx_folder
-
-
-
-

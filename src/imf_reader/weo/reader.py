@@ -26,7 +26,9 @@ def validate_version(version: Tuple) -> Version:
     """
 
     if not isinstance(version, tuple) or len(version) != 2:
-        raise TypeError("Invalid version. Must be a tuple of month ('April' or 'October') and year")
+        raise TypeError(
+            "Invalid version. Must be a tuple of month ('April' or 'October') and year"
+        )
 
     # check that the month is either April or October
     month = version[0].strip().capitalize()
@@ -94,11 +96,20 @@ def roll_back_version(version: Version) -> Version:
 
 @lru_cache
 def _fetch(version: Version) -> pd.DataFrame:
-    """Helper function which handles caching and fetching the data from the IMF website"""
+    """Helper function which handles caching and fetching the data from the IMF website
+
+    Args:
+        version: The version of the WEO data to fetch
+
+    Returns:
+        A pandas DataFrame containing the WEO data
+    """
 
     folder = SDMXScraper.scrape(*version)  # scrape the data and get the SDMX files
     df = SDMXParser.parse(folder)  # parse the SDMX files into a DataFrame
-    logger.debug(f"Data scraped and parsed successfully for version {version[0]} {version[1]}")
+    logger.debug(
+        f"Data scraped and parsed successfully for version {version[0]} {version[1]}"
+    )
     return df
 
 
@@ -144,7 +155,9 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
 
     # if no data is found for the expected latest version, roll back once and try again
     except NoDataError:
-        logger.debug(f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
-                     f" Rolling back version")
+        logger.debug(
+            f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
+            f" Rolling back version"
+        )
         latest_version = roll_back_version(latest_version)
         return fetch_data(latest_version)
