@@ -1,7 +1,7 @@
 """Tests for weo scraper module."""
 
 import pytest
-from unittest.mock import patch, Mock, PropertyMock
+from unittest.mock import patch, Mock
 import requests
 from bs4 import BeautifulSoup
 import io

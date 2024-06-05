@@ -102,6 +102,21 @@ class SDMXParser:
         logger.debug("Zip folder check passed")
 
     @staticmethod
+    def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Cleans the numeric columns
+
+        Replaces "n/a" and "--" with pd.NA and converts the columns to numeric.
+
+        """
+
+        df[SDMX_NUMERIC_COLUMNS] = (df[SDMX_NUMERIC_COLUMNS]
+                                    .replace(["n/a", "--"], pd.NA)
+                                    .apply(pd.to_numeric)
+                                    )
+
+        return df
+
+    @staticmethod
     def parse(sdmx_folder: ZipFile) -> pd.DataFrame:
         """Pipeline to parse the SDMX data files.
 
@@ -118,19 +133,10 @@ class SDMXParser:
         data_tree = ET.parse(sdmx_folder.open([file for file in sdmx_folder.namelist() if file.endswith(".xml")][0]))
         schema_tree = ET.parse(sdmx_folder.open([file for file in sdmx_folder.namelist() if file.endswith(".xsd")][0]))
 
-        # Parse the data
-        data = SDMXParser.parse_xml(data_tree)
-
-        # add label columns
-        data = SDMXParser.add_label_columns(data, schema_tree)
-        # convert to numeric
-        data[SDMX_NUMERIC_COLUMNS] = (data[SDMX_NUMERIC_COLUMNS]
-                                      .replace(["n/a", "--"], pd.NA, inplace=True)
-                                      .apply(pd.to_numeric)
-                                      )
+        # Parse and clean the data
+        data = SDMXParser.parse_xml(data_tree)  # Parse the xml data
+        data = SDMXParser.add_label_columns(data, schema_tree)  # add label columns
+        data = SDMXParser.clean_numeric_columns(data)  # convert to numeric
 
         logger.debug("Data successfully parsed")
         return data
-
-
-
