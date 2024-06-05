@@ -1,11 +1,17 @@
 [![PyPI](https://img.shields.io/pypi/v/imf-reader.svg)](https://pypi.org/project/imf-reader/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/imf_reader.svg)](https://pypi.org/project/imf_reader/)
 [![Documentation Status](https://readthedocs.org/projects/imf-reader/badge/?version=latest)](https://imf-reader.readthedocs.io/en/latest/?badge=latest)
+[![codecov](https://codecov.io/gh/ONEcampaign/imf-reader/branch/main/graph/badge.svg?token=YN8S1719NH)](https://codecov.io/gh/ONEcampaign/imf-reader)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 
 # imf-reader
 
-A package to access IMF data. For the moment this package only supports access to the World Economic Outlook (WEO) database.
+A package to access IMF data. This package only supports access to the World Economic Outlook (WEO) database.
 Support for other IMF data and databases may be added in the future.
+
+WEO data is accessed through SDMX (Statistical Data and Metadata eXchange) files published by the IMF.
+For more information on SDMX, please visit the [SDMX.org](https://sdmx.org/).
 
 ## Installation
 
@@ -15,8 +21,8 @@ $ pip install imf-reader
 
 ## Usage
 
-This package has very basic functionality only to retrieve WEO data as a pandas DataFrame. 
-To use it, import the `weo` module and call the `fetch_data` function.
+Tools to access WEO data can be found in the `weo` module.
+Import the `weo` module and call the `fetch_data` function to retrieve the latest WEO data.
 
 ```python
 from imf_reader import weo
