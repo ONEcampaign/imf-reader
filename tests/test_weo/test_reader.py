@@ -101,7 +101,6 @@ def test_fetch_data_attribute(mock_fetch, mock_gen_latest_version):
     assert reader.fetch_data.last_version_fetched == ("April", 2024)
 
 
-
 @patch("imf_reader.weo.reader._fetch.cache_clear")
 def test_clear_cache(mock_cache_clear):
     """Test for clear_cache method."""

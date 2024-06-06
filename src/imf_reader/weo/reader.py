@@ -146,7 +146,9 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
         version = validate_version(version)
         df = _fetch(version)
         logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
-        fetch_data.last_version_fetched = version  # store the version fetched as function attribute
+        fetch_data.last_version_fetched = (
+            version  # store the version fetched as function attribute
+        )
         return df
 
     # if no version is passed, generate the latest version and fetch the data
