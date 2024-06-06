@@ -127,7 +127,9 @@ class SDMXParser:
         """
 
         for column, dtype in SDMX_NUMERIC_COLUMNS.items():
-            df[column] = df[column].replace(["n/a", "--"], pd.NA).astype(dtype)
+            df[column] = df[column].replace(["n/a", "--", "NULL", ''], pd.NA)
+            df[column] = df[column].str.replace(",", "")  # Remove commas
+            df[column] = df[column].astype(dtype)
 
         return df
 
