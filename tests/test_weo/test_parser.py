@@ -194,8 +194,8 @@ class TestSDMXParser:
         data_df = pd.DataFrame(
             {
                 "REF_AREA_CODE": ["1", "2", "n/a", "--"],
-                "OBS_VALUE": ["1.1", "2.2", "n/a", "--"],
-                "SCALE_CODE": ["3", "4", "n/a", "--"],
+                "OBS_VALUE": ["1.1", "2.2", "n/a", ""],
+                "SCALE_CODE": ["3", "4", "n/a", "NULL"],
                 "LASTACTUALDATE": ["2023", "2024", "n/a", "--"],
                 "TIME_PERIOD": ["1980", "1981", "n/a", "--"],
             }
