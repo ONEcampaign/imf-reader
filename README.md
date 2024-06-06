@@ -11,7 +11,14 @@ A package to access IMF data. This package only supports access to the World Eco
 Support for other IMF data and databases may be added in the future.
 
 WEO data is accessed through SDMX (Statistical Data and Metadata eXchange) files published by the IMF.
-For more information on SDMX, please visit the [SDMX.org](https://sdmx.org/).
+For more information on SDMX, please visit the [SDMX.org](https://sdmx.org/). 
+
+__NOTE__:
+
+This package is designed to scrape data from the IMF website. 
+The IMF does not provide an official API for accessing WEO data yet. As a result, 
+the tools in this package are subject to breakage if the IMF changes the structure of their website,
+or releases corrupted data files or unexpected data formats. Please report any issues you encounter.
 
 ## Installation
 
