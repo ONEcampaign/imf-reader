@@ -16,13 +16,13 @@ SDMX_FIELDS_TO_MAP = {
 }
 
 # numeric columns and the type to convert them to
-SDMX_NUMERIC_COLUMNS = [
-    "REF_AREA_CODE",
-    "OBS_VALUE",
-    "SCALE_CODE",
-    "LASTACTUALDATE",
-    "TIME_PERIOD",
-]
+SDMX_NUMERIC_COLUMNS = {
+    "REF_AREA_CODE": "Int16",
+    "OBS_VALUE": "Float64",
+    "SCALE_CODE": "Int16",
+    "LASTACTUALDATE": "Int16",
+    "TIME_PERIOD": "Int16",
+}
 
 
 class SDMXParser:
@@ -122,13 +122,12 @@ class SDMXParser:
     def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
         """Cleans the numeric columns
 
-        Replaces "n/a" and "--" with pd.NA and converts the columns to numeric.
+        Replaces "n/a" and "--" with pd.NA and converts the columns to numeric and the correct type.
 
         """
 
-        df[SDMX_NUMERIC_COLUMNS] = (
-            df[SDMX_NUMERIC_COLUMNS].replace(["n/a", "--"], pd.NA).apply(pd.to_numeric)
-        )
+        for column, dtype in SDMX_NUMERIC_COLUMNS.items():
+            df[column] = df[column].replace(["n/a", "--"], pd.NA).astype(dtype)
 
         return df
 
