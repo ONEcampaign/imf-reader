@@ -59,7 +59,7 @@ Interested in contributing? Check out the contributing guidelines. Please note t
 
 ## License
 
-`imf-reader` was created by Luca Picci. It is licensed under the terms of the MIT license.
+`imf-reader` was initially created by Luca Picci and is maintained by the ONE Campaign. It is licensed under the terms of the MIT license.
 
 ## Credits
 

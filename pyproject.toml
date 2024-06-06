@@ -2,7 +2,7 @@
 name = "imf-reader"
 version = "0.0.2"
 description = "A package to access imf data"
-authors = ["Luca Picci"]
+authors = ["The ONE Campaign"]
 license = "MIT"
 readme = "README.md"
 
