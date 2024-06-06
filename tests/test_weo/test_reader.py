@@ -34,7 +34,7 @@ def test_validate_version():
         reader.validate_version("April 2024")
 
 
-@patch('imf_reader.weo.reader.datetime')
+@patch("imf_reader.weo.reader.datetime")
 def test_gen_latest_version(mock_datetime):
     """Test for gen_latest_version function."""
 
@@ -65,7 +65,7 @@ def test_roll_back_version():
         reader.roll_back_version(("March", 2024))
 
 
-@patch('imf_reader.weo.reader._fetch')
+@patch("imf_reader.weo.reader._fetch")
 def test_fetch_data(mock_fetch):
     """Test for fetch_data method."""
 
@@ -83,7 +83,7 @@ def test_fetch_data(mock_fetch):
     mock_fetch.assert_called_with(reader.gen_latest_version())
 
 
-@patch('imf_reader.weo.reader._fetch.cache_clear')
+@patch("imf_reader.weo.reader._fetch.cache_clear")
 def test_clear_cache(mock_cache_clear):
     """Test for clear_cache method."""
 
@@ -94,17 +94,22 @@ def test_clear_cache(mock_cache_clear):
     mock_cache_clear.assert_called_once()
 
 
-@patch('imf_reader.weo.reader._fetch')
-@patch('imf_reader.weo.reader.roll_back_version')
-@patch('imf_reader.weo.reader.gen_latest_version')
-def test_fetch_data_handles_NoDataError(mock_gen_latest_version, mock_roll_back_version, mock_fetch):
+@patch("imf_reader.weo.reader._fetch")
+@patch("imf_reader.weo.reader.roll_back_version")
+@patch("imf_reader.weo.reader.gen_latest_version")
+def test_fetch_data_handles_NoDataError(
+    mock_gen_latest_version, mock_roll_back_version, mock_fetch
+):
     """Test for fetch_data method when the version needs to be rolled back"""
 
     # Mock the gen_latest_version function to return a specific version
     mock_gen_latest_version.return_value = ("April", 2024)
 
     # Mock the _fetch function to raise a NoDataError for the first call and return a DataFrame for the second call
-    mock_fetch.side_effect = [NoDataError, pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})]
+    mock_fetch.side_effect = [
+        NoDataError,
+        pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]}),
+    ]
 
     # Mock the roll_back_version function to return a specific version
     mock_roll_back_version.return_value = ("October", 2023)
@@ -122,13 +127,6 @@ def test_fetch_data_handles_NoDataError(mock_gen_latest_version, mock_roll_back_
     mock_roll_back_version.assert_called_once_with(("April", 2024))
 
     # Check that the DataFrame returned by fetch_data is as expected
-    pd.testing.assert_frame_equal(df, pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]}))
-
-
-
-
-
-
-
-
-
+    pd.testing.assert_frame_equal(
+        df, pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
+    )

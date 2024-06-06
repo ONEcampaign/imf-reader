@@ -82,8 +82,8 @@ class TestSDMXScraper:
 
         # set up mock
         zip_content = io.BytesIO()
-        with ZipFile(zip_content, 'w') as zipf:
-            zipf.writestr('test.txt', 'test content')
+        with ZipFile(zip_content, "w") as zipf:
+            zipf.writestr("test.txt", "test content")
         mock_request.return_value.content = zip_content.getvalue()
 
         # Test expected behavior
@@ -98,25 +98,21 @@ class TestSDMXScraper:
             scraper.SDMXScraper.get_sdmx_folder(TEST_URL)
 
     @patch("imf_reader.weo.scraper.make_request")
-    @patch.object(ZipFile, 'testzip')
+    @patch.object(ZipFile, "testzip")
     def test_get_sdmx_folder_corrupt_zip(self, mock_testzip, mock_request):
         """Test get_sdmx_folder with a corrupt zip file"""
 
         # Create a valid zip file
         valid_zip_content = io.BytesIO()
-        with ZipFile(valid_zip_content, 'w') as zipf:
-            zipf.writestr('test.txt', 'This is some test content')
+        with ZipFile(valid_zip_content, "w") as zipf:
+            zipf.writestr("test.txt", "This is some test content")
 
         # Set up the mock to return the valid zip file
         mock_request.return_value.content = valid_zip_content.getvalue()
 
         # Mock testzip to always return a non-None value
-        mock_testzip.return_value = lambda: 'test.txt'
+        mock_testzip.return_value = lambda: "test.txt"
 
         # Test that a BadZipFile exception is raised
         with pytest.raises(BadZipFile, match="Corrupt zip file"):
             scraper.SDMXScraper.get_sdmx_folder(TEST_URL)
-
-
-
-

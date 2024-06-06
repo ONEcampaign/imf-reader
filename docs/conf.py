@@ -6,9 +6,9 @@
 
 # -- Project information -----------------------------------------------------
 
-project = u"imf_reader"
-copyright = u"2024, Luca Picci"
-author = u"Luca Picci"
+project = "imf_reader"
+copyright = "2024, Luca Picci"
+author = "Luca Picci"
 
 # -- General configuration ---------------------------------------------------
 
