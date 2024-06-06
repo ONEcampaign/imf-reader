@@ -41,6 +41,16 @@ be either "April" or "October".
 df = weo.fetch_data(version=("April", 2020))
 ```
 
+If the version of the data fetched is needed, it can be 
+retrieved from the function attribute `last_version_fetched`.
+
+```python
+df = weo.fetch_data()
+print(weo.fetch_data.last_version_fetched)
+# >>> ('April', 2024) or whichever version was just fetched
+```
+
+
 Caching is used to avoid multiple requests to the IMF website for the same data and to enhance performance. 
 Caching using the LRU (Least Recently Used) algorithm approach and stores data in RAM. The cache is cleared when the program is terminated.
 To clear the cache manually, use the `clear_cache` function.

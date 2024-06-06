@@ -83,6 +83,24 @@ def test_fetch_data(mock_fetch):
     mock_fetch.assert_called_with(reader.gen_latest_version())
 
 
+@patch("imf_reader.weo.reader.gen_latest_version")
+@patch("imf_reader.weo.reader._fetch")
+def test_fetch_data_attribute(mock_fetch, mock_gen_latest_version):
+    """Test for fetch_data method attribute."""
+
+    mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
+    mock_fetch.return_value = mock_data
+    mock_gen_latest_version.return_value = ("April", 2024)
+
+    # when a version is passed, check that the attribute is set
+    reader.fetch_data(("April", 2022))
+    assert reader.fetch_data.last_version_fetched == ("April", 2022)
+
+    # when no version is passed, check that the attribute is set
+    reader.fetch_data()
+    assert reader.fetch_data.last_version_fetched == ("April", 2024)
+
+
 @patch("imf_reader.weo.reader._fetch.cache_clear")
 def test_clear_cache(mock_cache_clear):
     """Test for clear_cache method."""
