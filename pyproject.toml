@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "imf-reader"
-version = "1.0.0b1"
+version = "1.0.0"
 description = "A package to access imf data"
 authors = ["The ONE Campaign"]
 license = "MIT"

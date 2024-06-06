@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.0.0 (2024-06-06)
+- First stable release of `imf-reader` with full functionality for accessing WEO data
+
 ## v1.0.0b1 (2024-06-06)
 - Beta release of `imf-reader` with full functionality for accessing WEO data
 
