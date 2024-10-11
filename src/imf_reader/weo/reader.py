@@ -83,11 +83,11 @@ def roll_back_version(version: Version) -> Version:
     """
 
     if version[0] == "October":
-        logger.info(f"Rolling back version to April {version[1]}")
+        logger.debug(f"Rolling back version to April {version[1]}")
         return "April", version[1]
 
     elif version[0] == "April":
-        logger.info(f"Rolling back version to October {version[1] - 1}")
+        logger.debug(f"Rolling back version to October {version[1] - 1}")
         return "October", version[1] - 1
 
     else:
@@ -145,7 +145,7 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
     if version is not None:
         version = validate_version(version)
         df = _fetch(version)
-        logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
+        logger.info(f"Data fetched successfully for version: {version[0]} {version[1]}")
         fetch_data.last_version_fetched = (
             version  # store the version fetched as function attribute
         )
@@ -158,9 +158,9 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
 
     # if no data is found for the expected latest version, roll back once and try again
     except NoDataError:
-        logger.debug(
-            f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
-            f" Rolling back version"
+        logger.info(
+            f"No data found for expected latest version: {latest_version[0]} {latest_version[1]}."
+            f" Rolling back version..."
         )
         latest_version = roll_back_version(latest_version)
         return fetch_data(latest_version)
