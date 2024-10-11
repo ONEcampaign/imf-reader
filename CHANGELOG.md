@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.1 (2024-10-11)
+- Improved dtype handling for `fetch_data` function
+- Improved error handling
+- Improved logging
+
 ## v1.0.0 (2024-06-06)
 - First stable release of `imf-reader` with full functionality for accessing WEO data
 
