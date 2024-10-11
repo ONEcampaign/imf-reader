@@ -137,7 +137,9 @@ class SDMXParser:
 
         for column in SDMX_NUMERIC_COLUMNS:
             df[column] = df[column].str.replace(",", "")  # Remove commas
-            df[column] = pd.to_numeric(df[column], errors="coerce")  # Convert to numeric
+            df[column] = pd.to_numeric(
+                df[column], errors="coerce"
+            )  # Convert to numeric
 
             # Convert to the correct type
             if column in SDMX_COLUMNS_TYPES:
