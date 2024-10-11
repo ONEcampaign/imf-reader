@@ -16,15 +16,8 @@ SDMX_FIELDS_TO_MAP = {
 }
 
 # numeric columns and the type to convert them to
-SDMX_NUMERIC_COLUMNS = [
-    "REF_AREA_CODE",
-    "OBS_VALUE",
-    "SCALE_CODE",
-    "LASTACTUALDATE",
-    "TIME_PERIOD",
-]
-
-SDMX_COLUMNS_TYPES = {
+SDMX_NUMERIC_COLUMNS = {
+    "OBS_VALUE": "Float64",
     "REF_AREA_CODE": "Int64",
     "SCALE_CODE": "Int64",
     "LASTACTUALDATE": "Int64",
@@ -135,15 +128,17 @@ class SDMXParser:
 
         """
 
-        for column in SDMX_NUMERIC_COLUMNS:
+        for column, dtype in SDMX_NUMERIC_COLUMNS.items():
             df[column] = df[column].str.replace(",", "")  # Remove commas
             df[column] = pd.to_numeric(
                 df[column], errors="coerce"
             )  # Convert to numeric
+            df[column] = df[column].astype(dtype)
 
-            # Convert to the correct type
-            if column in SDMX_COLUMNS_TYPES:
-                df[column] = df[column].astype(SDMX_COLUMNS_TYPES[column])
+        # set type for the other columns to string
+        for column in df.columns:
+            if column not in SDMX_NUMERIC_COLUMNS.keys():
+                df[column] = df[column].astype("string")
 
         return df
 
