@@ -107,9 +107,7 @@ def _fetch(version: Version) -> pd.DataFrame:
 
     folder = SDMXScraper.scrape(*version)  # scrape the data and get the SDMX files
     df = SDMXParser.parse(folder)  # parse the SDMX files into a DataFrame
-    logger.debug(
-        f"Data scraped and parsed successfully for version {version[0]} {version[1]}"
-    )
+    logger.info(f"Data fetched successfully for version: {version[0]} {version[1]}")
     return df
 
 
@@ -143,13 +141,17 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
 
     # if version is passed, validate it and fetch the data
     if version is not None:
-        version = validate_version(version)
-        df = _fetch(version)
-        logger.info(f"Data fetched successfully for version: {version[0]} {version[1]}")
-        fetch_data.last_version_fetched = (
-            version  # store the version fetched as function attribute
-        )
-        return df
+        try:
+            version = validate_version(version)
+            df = _fetch(version)
+            fetch_data.last_version_fetched = (
+                version  # store the version fetched as function attribute
+            )
+            return df
+        except Exception as e:
+            raise NoDataError(
+                f"Could not fetch data for version: {version[0]} {version[1]}. {str(e)}"
+            )
 
     # if no version is passed, generate the latest version and fetch the data
     latest_version = gen_latest_version()
