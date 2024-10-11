@@ -17,11 +17,11 @@ SDMX_FIELDS_TO_MAP = {
 
 # numeric columns and the type to convert them to
 SDMX_NUMERIC_COLUMNS = {
-    "REF_AREA_CODE": "Int16",
     "OBS_VALUE": "Float64",
-    "SCALE_CODE": "Int16",
-    "LASTACTUALDATE": "Int16",
-    "TIME_PERIOD": "Int16",
+    "REF_AREA_CODE": "Int64",
+    "SCALE_CODE": "Int64",
+    "LASTACTUALDATE": "Int64",
+    "TIME_PERIOD": "Int64",
 }
 
 
@@ -121,15 +121,24 @@ class SDMXParser:
     @staticmethod
     def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
         """Cleans the numeric columns
+        Replaces non numeric values with null values and converts the columns to numeric and the correct type.
 
-        Replaces "n/a" and "--" with pd.NA and converts the columns to numeric and the correct type.
+        Returns:
+            The DataFrame with the numeric columns cleaned.
 
         """
 
         for column, dtype in SDMX_NUMERIC_COLUMNS.items():
-            df[column] = df[column].replace(["n/a", "--", "NULL", ""], pd.NA)
             df[column] = df[column].str.replace(",", "")  # Remove commas
+            df[column] = pd.to_numeric(
+                df[column], errors="coerce"
+            )  # Convert to numeric
             df[column] = df[column].astype(dtype)
+
+        # set type for the other columns to string
+        for column in df.columns:
+            if column not in SDMX_NUMERIC_COLUMNS.keys():
+                df[column] = df[column].astype("string")
 
         return df
 

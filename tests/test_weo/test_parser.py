@@ -222,17 +222,3 @@ class TestSDMXParser:
         # Assert that "n/a" and "--" have been replaced with nulls
         for column in result_df.columns:
             assert result_df[column].isnull().any()
-
-        # check error is raised if any other unusual values are present
-        data_df = pd.DataFrame(
-            {
-                "REF_AREA_CODE": ["1", "2", "n/a", "--"],
-                "OBS_VALUE": ["1.1", "2.2", "n/a", "abc"],
-                "SCALE_CODE": ["3", "4", "n/a", "--"],
-                "LASTACTUALDATE": ["2023", "2024", "n/a", "--"],
-                "TIME_PERIOD": ["1980", "1981", "n/a", "--"],
-            }
-        )
-
-        with pytest.raises(ValueError):
-            SDMXParser.clean_numeric_columns(data_df)

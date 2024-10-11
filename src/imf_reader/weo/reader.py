@@ -83,11 +83,11 @@ def roll_back_version(version: Version) -> Version:
     """
 
     if version[0] == "October":
-        logger.info(f"Rolling back version to April {version[1]}")
+        logger.debug(f"Rolling back version to April {version[1]}")
         return "April", version[1]
 
     elif version[0] == "April":
-        logger.info(f"Rolling back version to October {version[1] - 1}")
+        logger.debug(f"Rolling back version to October {version[1] - 1}")
         return "October", version[1] - 1
 
     else:
@@ -107,9 +107,7 @@ def _fetch(version: Version) -> pd.DataFrame:
 
     folder = SDMXScraper.scrape(*version)  # scrape the data and get the SDMX files
     df = SDMXParser.parse(folder)  # parse the SDMX files into a DataFrame
-    logger.debug(
-        f"Data scraped and parsed successfully for version {version[0]} {version[1]}"
-    )
+    logger.info(f"Data fetched successfully for version: {version[0]} {version[1]}")
     return df
 
 
@@ -143,13 +141,17 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
 
     # if version is passed, validate it and fetch the data
     if version is not None:
-        version = validate_version(version)
-        df = _fetch(version)
-        logger.info(f"Data fetched successfully for version {version[0]} {version[1]}")
-        fetch_data.last_version_fetched = (
-            version  # store the version fetched as function attribute
-        )
-        return df
+        try:
+            version = validate_version(version)
+            df = _fetch(version)
+            fetch_data.last_version_fetched = (
+                version  # store the version fetched as function attribute
+            )
+            return df
+        except Exception as e:
+            raise NoDataError(
+                f"Could not fetch data for version: {version[0]} {version[1]}. {str(e)}"
+            )
 
     # if no version is passed, generate the latest version and fetch the data
     latest_version = gen_latest_version()
@@ -158,9 +160,9 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
 
     # if no data is found for the expected latest version, roll back once and try again
     except NoDataError:
-        logger.debug(
-            f"No data found for the expected latest version {latest_version[0]} {latest_version[1]}."
-            f" Rolling back version"
+        logger.info(
+            f"No data found for expected latest version: {latest_version[0]} {latest_version[1]}."
+            f" Rolling back version..."
         )
         latest_version = roll_back_version(latest_version)
         return fetch_data(latest_version)
