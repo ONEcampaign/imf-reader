@@ -1,0 +1,1 @@
+"""Special Drawing Rights (SDR) reader module."""
