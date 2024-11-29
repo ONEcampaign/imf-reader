@@ -6,31 +6,9 @@ import io
 from zipfile import ZipFile, BadZipFile
 
 from imf_reader.config import NoDataError, logger
+from imf_reader.utils import make_request
 
 BASE_URL = "https://www.imf.org/"
-
-
-def make_request(url: str) -> requests.models.Response:
-    """Make a request to a url.
-
-    Args:
-        url: url to make request to
-
-    Returns:
-        requests.models.Response: response object
-    """
-
-    try:
-        response = requests.get(url)
-        if response.status_code != 200:
-            raise ConnectionError(
-                f"Could not connect to {url}. Status code: {response.status_code}"
-            )
-
-        return response
-
-    except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Could not connect to {url}. Error: {str(e)}")
 
 
 def get_soup(month: str, year: str | int) -> BeautifulSoup:
