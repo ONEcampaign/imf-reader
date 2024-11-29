@@ -84,11 +84,11 @@ def get_latest_date() -> tuple[int, int]:
     return date.year, date.month
 
 
-def fetch_data(date: tuple[int, int] | None = None) -> pd.DataFrame:
+def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFrame:
     """Fetch SDR holdings and allocations data for a given date
 
     Args:
-        date: A tuple of year and month. If None, the latest date is used
+        date: A tuple of year and month e.g (2024, 11). If None, the latest data announcements released are fetched
 
     returns:
         pd.DataFrame: A dataframe with the SDR data

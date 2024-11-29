@@ -80,7 +80,7 @@ def _format_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @lru_cache
-def fetch_interest_rate() -> pd.DataFrame:
+def fetch_interest_rates() -> pd.DataFrame:
     """Fetch the historic SDR interest rates from the IMF
 
     The SDR interest rate is based on the sum of the multiplicative products in SDR terms of the currency
