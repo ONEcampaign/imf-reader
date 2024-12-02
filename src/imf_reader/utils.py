@@ -2,6 +2,7 @@
 
 import requests
 
+
 def make_request(url: str) -> requests.models.Response:
     """Make a request to a url.
 

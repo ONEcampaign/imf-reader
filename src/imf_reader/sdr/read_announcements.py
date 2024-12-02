@@ -4,6 +4,7 @@
 info: https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr
 
 """
+
 from functools import lru_cache
 import pandas as pd
 import calendar
@@ -15,7 +16,6 @@ from imf_reader.config import logger, NoDataError
 
 BASE_URL = "https://www.imf.org/external/np/fin/tad/"
 MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
-
 
 
 def read_tsv(url: str) -> pd.DataFrame:
@@ -34,17 +34,20 @@ def clean_df(df: pd.DataFrame) -> pd.DataFrame:
     df = df.iloc[3:, 0].str.split("\t", expand=True)
     df.columns = ["entity", "holdings", "allocations"]
 
-    return (
-        df
-        .assign(holdings = lambda d: pd.to_numeric(d.holdings.str.replace(r"[^\d.]", "", regex=True), errors="coerce"),
-                allocations = lambda d: pd.to_numeric(d.allocations.str.replace(r"[^\d.]", "", regex=True), errors="coerce")
-                )
-        .melt(id_vars="entity", value_vars=["holdings", "allocations"], var_name = "indicator")
+    return df.assign(
+        holdings=lambda d: pd.to_numeric(
+            d.holdings.str.replace(r"[^\d.]", "", regex=True), errors="coerce"
+        ),
+        allocations=lambda d: pd.to_numeric(
+            d.allocations.str.replace(r"[^\d.]", "", regex=True), errors="coerce"
+        ),
+    ).melt(
+        id_vars="entity", value_vars=["holdings", "allocations"], var_name="indicator"
     )
 
+
 def format_date(month: int, year: int) -> str:
-    """Return a date as year-month-day where day is the last day in the month
-    """
+    """Return a date as year-month-day where day is the last day in the month"""
 
     last_day = calendar.monthrange(year, month)[1]
     return f"{year}-{month}-{last_day}"
@@ -78,7 +81,7 @@ def get_latest_date() -> tuple[int, int]:
     row = table.find_all("tr")[1]
 
     date = row.td.text.strip()
-    date = datetime.strptime(date, '%B %d, %Y')
+    date = datetime.strptime(date, "%B %d, %Y")
 
     # Extract the year and month as a tuple
     return date.year, date.month
@@ -98,4 +101,3 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         date = get_latest_date()
 
     return get_data(*date)
-

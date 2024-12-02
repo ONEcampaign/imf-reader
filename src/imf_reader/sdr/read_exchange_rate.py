@@ -19,7 +19,7 @@ def read_data():
     """Read the data from the IMF website"""
 
     data = {
-        '__EVENTTARGET': 'lbnTSV',
+        "__EVENTTARGET": "lbnTSV",
     }
 
     try:
@@ -30,7 +30,9 @@ def read_data():
         raise ConnectionError(f"Could not connect to {BASE_URL}. Error: {str(e)}")
 
     try:
-        return pd.read_csv(io.BytesIO(response.content), delimiter="/t", engine="python")
+        return pd.read_csv(
+            io.BytesIO(response.content), delimiter="/t", engine="python"
+        )
 
     except pd.errors.ParserError as e:
         raise ValueError(f"Could not parse data. Error: {str(e)}")
@@ -50,24 +52,23 @@ def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]):
     df.columns = df.iloc[0]
     df = df.iloc[1:]
 
-    exchange_series = (df
-                .loc[lambda d: d["Report date"] == col_val]
-                .iloc[:, 1]
-                .reset_index(drop=True)
-                )
+    exchange_series = (
+        df.loc[lambda d: d["Report date"] == col_val].iloc[:, 1].reset_index(drop=True)
+    )
 
-    dates_series = (df
-             .dropna(subset = df.columns[3])
-             .iloc[:, 0]
-             .drop_duplicates()
-             .reset_index(drop=True)
-             )
+    dates_series = (
+        df.dropna(subset=df.columns[3])
+        .iloc[:, 0]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
 
-    return (pd.DataFrame({'date': dates_series, "exchange_rate": exchange_series})
-            .assign(date = lambda d: pd.to_datetime(d.date),
-                    exchange_rate = lambda d: pd.to_numeric(d.exchange_rate, errors="coerce")
-                    )
-            )
+    return pd.DataFrame(
+        {"date": dates_series, "exchange_rate": exchange_series}
+    ).assign(
+        date=lambda d: pd.to_datetime(d.date),
+        exchange_rate=lambda d: pd.to_numeric(d.exchange_rate, errors="coerce"),
+    )
 
 
 @lru_cache

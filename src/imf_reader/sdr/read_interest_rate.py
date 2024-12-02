@@ -17,7 +17,7 @@ def read_data():
     """Read the data from the IMF website"""
 
     data = {
-        '__EVENTTARGET': 'lbnTSV',
+        "__EVENTTARGET": "lbnTSV",
     }
 
     try:
@@ -28,55 +28,60 @@ def read_data():
         raise ConnectionError(f"Could not connect to {BASE_URL}. Error: {str(e)}")
 
     try:
-        return pd.read_csv(io.BytesIO(response.content), delimiter="/t", engine="python")
+        return pd.read_csv(
+            io.BytesIO(response.content), delimiter="/t", engine="python"
+        )
 
     except pd.errors.ParserError as e:
         raise ValueError(f"Could not parse data. Error: {str(e)}")
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Cleaning/parsing steps for the data. split tab separated value into separate columns, rename columns, assign types, and additional formatting
-    """
-    columns = {"Effective from": "effective_from",
-               "Effective to": "effective_to",
-               }
+    """Cleaning/parsing steps for the data. split tab separated value into separate columns, rename columns, assign types, and additional formatting"""
+    columns = {
+        "Effective from": "effective_from",
+        "Effective to": "effective_to",
+    }
 
     df = df.iloc[:, 0].str.split("\t", expand=True)
     df.columns = df.iloc[0]
     df = df.iloc[1:]
 
-    return (df
-            .rename(columns = columns)
-            .loc[:, columns.values()]
-            .dropna(subset=["effective_to"])
-            .pipe(_format_data)
-            .assign(interest_rate = lambda d: pd.to_numeric(d.interest_rate, errors="coerce"),
-                    effective_from = lambda d: pd.to_datetime(d.effective_from),
-                    effective_to = lambda d: pd.to_datetime(d.effective_to)
-                    )
+    return (
+        df.rename(columns=columns)
+        .loc[:, columns.values()]
+        .dropna(subset=["effective_to"])
+        .pipe(_format_data)
+        .assign(
+            interest_rate=lambda d: pd.to_numeric(d.interest_rate, errors="coerce"),
+            effective_from=lambda d: pd.to_datetime(d.effective_from),
+            effective_to=lambda d: pd.to_datetime(d.effective_to),
+        )
     )
 
 
 def _format_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Format the data. Only keep the rows for the SDR interest rate and add the dates
-    """
+    """Format the data. Only keep the rows for the SDR interest rate and add the dates"""
 
-    dates_df =  (df
-    .loc[lambda d: ~ d['effective_from'].isin(["SDR Interest Rate", "Total", "Floor for SDR Interest Rate"])]
+    dates_df = (
+        df.loc[
+            lambda d: ~d["effective_from"].isin(
+                ["SDR Interest Rate", "Total", "Floor for SDR Interest Rate"]
+            )
+        ]
         .drop_duplicates()
         .reset_index(drop=True)
     )
 
-    sdr_df = (df
-              .loc[lambda d: d.effective_from == "SDR Interest Rate"]
-              .iloc[:, 1:2]
-              .reset_index(drop=True)
-              )
+    sdr_df = (
+        df.loc[lambda d: d.effective_from == "SDR Interest Rate"]
+        .iloc[:, 1:2]
+        .reset_index(drop=True)
+    )
 
-    sdr_df.columns = ['interest_rate']
+    sdr_df.columns = ["interest_rate"]
 
     return sdr_df.join(dates_df)
-
 
 
 @lru_cache
