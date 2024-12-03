@@ -54,7 +54,7 @@ def format_date(month: int, year: int) -> str:
 
 
 @lru_cache
-def get_data(year: int, month: int):
+def get_holdings_and_allocations_data(year: int, month: int):
     """Get sdr allocations and holdings data for a given month and year"""
 
     date = format_date(month, year)
@@ -100,4 +100,4 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
     if date is None:
         date = get_latest_date()
 
-    return get_data(*date)
+    return get_holdings_and_allocations_data(*date)

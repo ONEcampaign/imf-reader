@@ -15,7 +15,7 @@ from imf_reader.config import logger
 BASE_URL = "https://www.imf.org/external/np/fin/data/rms_sdrv.aspx"
 
 
-def read_data():
+def get_exchange_rates_data():
     """Read the data from the IMF website"""
 
     data = {
@@ -38,9 +38,40 @@ def read_data():
         raise ValueError(f"Could not parse data. Error: {str(e)}")
 
 
+def preprocess_dataframe(df: pd.DataFrame):
+    """
+    Preprocess the input DataFrame by splitting columns and setting headers.
+    """
+    df = df.iloc[:, 0].str.split("\t", expand=True)
+    df.columns = df.iloc[0]
+    return df.iloc[1:]
+
+
+def extract_exchange_series(df: pd.DataFrame, col_val: str):
+    """
+    Extract the exchange rate series for the given column value.
+    """
+    return (
+        df.loc[lambda d: d["Report date"] == col_val].iloc[:, 1].reset_index(drop=True)
+    )
+
+
+def extract_dates_series(df: pd.DataFrame):
+    """
+    Extract the dates series from the DataFrame.
+    """
+    return (
+        df.dropna(subset=df.columns[3])
+        .iloc[:, 0]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+
 def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]):
     """Parse the data from the IMF website"""
 
+    # Validate unit basis
     if unit_basis == "USD":
         col_val = "U.S.$1.00 = SDR"
     elif unit_basis == "SDR":
@@ -48,20 +79,10 @@ def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]):
     else:
         raise ValueError("unit_basis must be either 'SDR' or 'USD'")
 
-    df = df.iloc[:, 0].str.split("\t", expand=True)
-    df.columns = df.iloc[0]
-    df = df.iloc[1:]
-
-    exchange_series = (
-        df.loc[lambda d: d["Report date"] == col_val].iloc[:, 1].reset_index(drop=True)
-    )
-
-    dates_series = (
-        df.dropna(subset=df.columns[3])
-        .iloc[:, 0]
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
+    # Preprocess dataframe and extract relevant columns
+    df = preprocess_dataframe(df)
+    exchange_series = extract_exchange_series(df, col_val)
+    dates_series = extract_dates_series(df)
 
     return pd.DataFrame(
         {"date": dates_series, "exchange_rate": exchange_series}
@@ -88,5 +109,5 @@ def fetch_exchange_rates(unit_basis: Literal["SDR", "USD"] = "SDR") -> pd.DataFr
 
     logger.info("Fetching exchange rate data")
 
-    df = read_data()
+    df = get_exchange_rates_data()
     return parse_data(df, unit_basis)

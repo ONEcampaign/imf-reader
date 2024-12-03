@@ -13,7 +13,7 @@ from imf_reader.config import logger
 BASE_URL: str = "https://www.imf.org/external/np/fin/data/sdr_ir.aspx"
 
 
-def read_data():
+def get_interest_rates_data():
     """Read the data from the IMF website"""
 
     data = {
@@ -51,6 +51,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df.rename(columns=columns)
         .loc[:, columns.values()]
         .dropna(subset=["effective_to"])
+        .pipe(_filter_data())
         .pipe(_format_data)
         .assign(
             interest_rate=lambda d: pd.to_numeric(d.interest_rate, errors="coerce"),
@@ -60,21 +61,27 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _format_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Format the data. Only keep the rows for the SDR interest rate and add the dates"""
+def _filter_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter the DataFrame to separate rows for dates and SDR interest rates.
+    """
+    return df.loc[
+        lambda d: ~d["effective_from"].isin(["Total", "Floor for SDR Interest Rate"])
+    ].reset_index(drop=True)
 
+
+def _format_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Format the filtered DataFrame into a clean DataFrame with interest rates and dates.
+    """
     dates_df = (
-        df.loc[
-            lambda d: ~d["effective_from"].isin(
-                ["SDR Interest Rate", "Total", "Floor for SDR Interest Rate"]
-            )
-        ]
+        df.loc[lambda d: d["effective_from"] != "SDR Interest Rate"]
         .drop_duplicates()
         .reset_index(drop=True)
     )
 
     sdr_df = (
-        df.loc[lambda d: d.effective_from == "SDR Interest Rate"]
+        df.loc[lambda d: d["effective_from"] == "SDR Interest Rate"]
         .iloc[:, 1:2]
         .reset_index(drop=True)
     )
@@ -99,7 +106,7 @@ def fetch_interest_rates() -> pd.DataFrame:
 
     logger.info("Fetching SDR interest rates")
 
-    df = read_data()
+    df = get_interest_rates_data()
     df = clean_data(df)
 
     return df
