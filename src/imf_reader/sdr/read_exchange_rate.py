@@ -44,7 +44,15 @@ def preprocess_dataframe(df: pd.DataFrame):
     """
     df = df.iloc[:, 0].str.split("\t", expand=True)
     df.columns = df.iloc[0]
-    return df.iloc[1:]
+    df = df.iloc[1:].reset_index(drop=True)
+
+    # Ensure required columns are present
+    required_columns = ["Report date"]
+    for column in required_columns:
+        if column not in df.columns:
+            raise KeyError(f"Missing required column: {column}")
+
+    return df
 
 
 def extract_exchange_series(df: pd.DataFrame, col_val: str):
