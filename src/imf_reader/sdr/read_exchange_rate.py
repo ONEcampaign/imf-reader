@@ -38,7 +38,7 @@ def get_exchange_rates_data():
         raise ValueError(f"Could not parse data. Error: {str(e)}")
 
 
-def preprocess_dataframe(df: pd.DataFrame):
+def preprocess_data(df: pd.DataFrame):
     """
     Preprocess the input DataFrame by splitting columns and setting headers.
     """
@@ -88,7 +88,7 @@ def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]):
         raise ValueError("unit_basis must be either 'SDR' or 'USD'")
 
     # Preprocess dataframe and extract relevant columns
-    df = preprocess_dataframe(df)
+    df = preprocess_data(df)
     exchange_series = extract_exchange_series(df, col_val)
     dates_series = extract_dates_series(df)
 

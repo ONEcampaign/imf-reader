@@ -2,8 +2,15 @@ from unittest.mock import patch, MagicMock, ANY
 import pytest
 import requests
 import pandas as pd
-from imf_reader.sdr import read_exchange_rate
-from imf_reader.sdr.read_exchange_rate import BASE_URL
+from imf_reader.sdr.read_exchange_rate import (
+    preprocess_data,
+    fetch_exchange_rates,
+    get_exchange_rates_data,
+    extract_exchange_series,
+    extract_dates_series,
+    parse_data,
+    BASE_URL,
+)
 
 
 @pytest.fixture
@@ -26,7 +33,7 @@ class TestExchangeRateModule:
     @pytest.fixture(autouse=True)
     def clear_cache(self):
         """Clear cache before each test."""
-        read_exchange_rate.fetch_exchange_rates.cache_clear()
+        fetch_exchange_rates.cache_clear()
 
     @patch("requests.post")
     def test_get_exchange_rates_data_success(self, mock_post):
@@ -42,7 +49,7 @@ class TestExchangeRateModule:
         expected_df = pd.DataFrame(
             {"Column1\tColumn2": ["2023-11-30\t1.234", "2023-12-01\t0.789"]}
         )
-        result = read_exchange_rate.get_exchange_rates_data()
+        result = get_exchange_rates_data()
 
         # Assertions
         pd.testing.assert_frame_equal(result, expected_df)
@@ -59,13 +66,13 @@ class TestExchangeRateModule:
             # Verify the exception
             with pytest.raises(
                 ConnectionError,
-                match=f"Could not connect to {read_exchange_rate.BASE_URL}",
+                match=f"Could not connect to {BASE_URL}",
             ):
-                read_exchange_rate.get_exchange_rates_data()
+                get_exchange_rates_data()
 
             # Verify the mock was called with the expected arguments
             mock_post.assert_called_once_with(
-                read_exchange_rate.BASE_URL, data={"__EVENTTARGET": "lbnTSV"}
+                BASE_URL, data={"__EVENTTARGET": "lbnTSV"}
             )
 
     def test_get_exchange_rates_data_parse_error(self):
@@ -84,15 +91,15 @@ class TestExchangeRateModule:
 
             # Use pytest.raises to assert the ValueError
             with pytest.raises(ValueError, match="Could not parse data"):
-                read_exchange_rate.get_exchange_rates_data()
+                get_exchange_rates_data()
 
             # Assertions
             mock_post.assert_called_once_with(
-                read_exchange_rate.BASE_URL, data={"__EVENTTARGET": "lbnTSV"}
+                BASE_URL, data={"__EVENTTARGET": "lbnTSV"}
             )
             mock_read_csv.assert_called_once_with(ANY, delimiter="/t", engine="python")
 
-    def test_preprocess_dataframe_success(self, input_df):
+    def test_preprocess_data_success(self, input_df):
         """Test preprocessing of the DataFrame"""
 
         expected_df = pd.DataFrame(
@@ -104,12 +111,12 @@ class TestExchangeRateModule:
             }
         )
         expected_df.columns.name = 0
-        result = read_exchange_rate.preprocess_dataframe(input_df)
+        result = preprocess_data(input_df)
 
         # Assertion
         pd.testing.assert_frame_equal(result, expected_df)
 
-    def test_preprocess_dataframe_missing_column(self):
+    def test_preprocess_data_missing_column(self):
         """Test that KeyError is raised when 'Report date' column is missing."""
         # Create the input DataFrame
         input_df = pd.DataFrame(
@@ -123,7 +130,7 @@ class TestExchangeRateModule:
 
         # Assert that KeyError is raised with the correct message
         with pytest.raises(KeyError, match="Missing required column: Report date"):
-            read_exchange_rate.preprocess_dataframe(input_df)
+            preprocess_data(input_df)
 
     @pytest.mark.parametrize(
         "currency_code, expected_xrate",
@@ -134,8 +141,8 @@ class TestExchangeRateModule:
     )
     def test_extract_exchange_series(self, input_df, currency_code, expected_xrate):
         """Test extracting the exchange series for a specific column value"""
-        input_df = read_exchange_rate.preprocess_dataframe(input_df)
-        result = read_exchange_rate.extract_exchange_series(input_df, currency_code)
+        input_df = preprocess_data(input_df)
+        result = extract_exchange_series(input_df, currency_code)
         expected_series = pd.Series([expected_xrate], name="Currency Unit")
 
         # Assertion
@@ -143,8 +150,8 @@ class TestExchangeRateModule:
 
     def test_extract_dates_series(self, input_df):
         """Test extracting unique dates from the DataFrame"""
-        preprocessed_df = read_exchange_rate.preprocess_dataframe(input_df)
-        result = read_exchange_rate.extract_dates_series(preprocessed_df)
+        preprocessed_df = preprocess_data(input_df)
+        result = extract_dates_series(preprocessed_df)
         expected_series = pd.Series(["2023-11-30"], name="Report date")
 
         # Assertion
@@ -163,7 +170,7 @@ class TestExchangeRateModule:
         expected_df = pd.DataFrame(
             {"date": pd.to_datetime(["2023-11-30"]), "exchange_rate": [expected_xrate]},
         )
-        result = read_exchange_rate.parse_data(input_df, currency_code)
+        result = parse_data(input_df, currency_code)
 
         # Assertions
         pd.testing.assert_frame_equal(result, expected_df)
@@ -176,13 +183,14 @@ class TestExchangeRateModule:
         with pytest.raises(
             ValueError, match="unit_basis must be either 'SDR' or 'USD'"
         ):
-            read_exchange_rate.parse_data(input_df, "INVALID")
+            parse_data(input_df, "INVALID")
 
     @patch("imf_reader.sdr.read_exchange_rate.get_exchange_rates_data")
     @patch("imf_reader.sdr.read_exchange_rate.parse_data")
     def test_fetch_exchange_rates(self, mock_parse_data, mock_get_data, input_df):
         """Test fetching exchange rates"""
         # Mock return values for the patched functions
+        mock_get_data.return_value = input_df
         mock_get_data.return_value = input_df
         mock_parse_data.return_value = pd.DataFrame(
             {"date": pd.to_datetime(["2023-11-30"]), "exchange_rate": [0.123]}
@@ -193,7 +201,7 @@ class TestExchangeRateModule:
 
         # Mock the logger
         with patch("imf_reader.sdr.read_exchange_rate.logger.info") as mock_logger:
-            result = read_exchange_rate.fetch_exchange_rates("USD")
+            result = fetch_exchange_rates("USD")
 
             # Assertions
             mock_get_data.assert_called_once()
