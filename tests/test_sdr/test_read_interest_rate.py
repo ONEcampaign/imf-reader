@@ -155,7 +155,12 @@ class TestReadInterestRate:
         # Expected Output DataFrame
         expected_df = pd.DataFrame(
             {
-                "effective_from": ["01/12/2024", "SDR Interest Rate", "06/12/2024", "09/12/2024"],
+                "effective_from": [
+                    "01/12/2024",
+                    "SDR Interest Rate",
+                    "06/12/2024",
+                    "09/12/2024",
+                ],
                 "effective_to": ["05/12/2024", "1.50", "08/12/2024", "12/12/2024"],
             }
         )
@@ -164,24 +169,25 @@ class TestReadInterestRate:
         # Validate the results
         pd.testing.assert_frame_equal(result, expected_df)
 
-
     def test_format_data_valid(self, input_df):
         """Test _format_data with valid input."""
-        expected_df = pd.DataFrame({
-            "interest_rate": ["1.50"],
-            "effective_from": ["01/12/2024"],
-            "effective_to": ["05/12/2024"]
-        })
+        expected_df = pd.DataFrame(
+            {
+                "interest_rate": ["1.50"],
+                "effective_from": ["01/12/2024"],
+                "effective_to": ["05/12/2024"],
+            }
+        )
 
-        result = (preprocess_data(input_df)
-                  .pipe(_filter_data)
-                  .pipe(_format_data)
-                  .reset_index(drop=True))
+        result = (
+            preprocess_data(input_df)
+            .pipe(_filter_data)
+            .pipe(_format_data)
+            .reset_index(drop=True)
+        )
 
         # Validate the structure and content of the DataFrame
         pd.testing.assert_frame_equal(result, expected_df)
-
-
 
     def test_clean_data_valid(self, input_df):
         """Test clean_data with valid input DataFrame."""
