@@ -11,6 +11,7 @@ from imf_reader.sdr.read_interest_rate import (
     _format_data,
     clean_data,
     fetch_interest_rates,
+    clear_cache
 )
 
 
@@ -38,7 +39,7 @@ class TestReadInterestRate:
     @pytest.fixture(autouse=True)
     def clear_cache(self):
         """Clear cache before each test."""
-        fetch_interest_rates.cache_clear()
+        clear_cache()
 
     @patch("requests.post")
     def test_get_interest_rates_data(self, mock_post):

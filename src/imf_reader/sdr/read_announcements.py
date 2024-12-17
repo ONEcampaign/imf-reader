@@ -54,7 +54,10 @@ def format_date(month: int, year: int) -> str:
 
 
 @lru_cache
-def get_holdings_and_allocations_data(year: int, month: int):
+def get_holdings_and_allocations_data(
+    month: int,
+    year: int,
+):
     """Get sdr allocations and holdings data for a given month and year"""
 
     date = format_date(month, year)
@@ -101,3 +104,10 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         date = get_latest_date()
 
     return get_holdings_and_allocations_data(*date)
+
+
+def clear_cache():
+    """Clear the cache for all lru_cache-decorated functions."""
+    get_holdings_and_allocations_data.cache_clear()
+    get_latest_date.cache_clear()
+    logger.info("Cache cleared")

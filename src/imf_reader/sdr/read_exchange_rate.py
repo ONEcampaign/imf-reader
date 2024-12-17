@@ -119,3 +119,9 @@ def fetch_exchange_rates(unit_basis: Literal["SDR", "USD"] = "SDR") -> pd.DataFr
 
     df = get_exchange_rates_data()
     return parse_data(df, unit_basis)
+
+
+def clear_cache():
+    """Clear the cache for all lru_cache-decorated functions."""
+    fetch_exchange_rates.cache_clear()
+    logger.info("Cache cleared")

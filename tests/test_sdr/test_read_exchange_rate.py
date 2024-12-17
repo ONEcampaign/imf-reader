@@ -10,6 +10,7 @@ from imf_reader.sdr.read_exchange_rate import (
     extract_dates_series,
     parse_data,
     BASE_URL,
+    clear_cache,
 )
 
 
@@ -33,7 +34,7 @@ class TestExchangeRateModule:
     @pytest.fixture(autouse=True)
     def clear_cache(self):
         """Clear cache before each test."""
-        fetch_exchange_rates.cache_clear()
+        clear_cache()
 
     @patch("requests.post")
     def test_get_exchange_rates_data_success(self, mock_post):
@@ -191,7 +192,6 @@ class TestExchangeRateModule:
         """Test fetching exchange rates"""
         # Mock return values for the patched functions
         mock_get_data.return_value = input_df
-        mock_get_data.return_value = input_df
         mock_parse_data.return_value = pd.DataFrame(
             {"date": pd.to_datetime(["2023-11-30"]), "exchange_rate": [0.123]}
         )
@@ -208,3 +208,36 @@ class TestExchangeRateModule:
             mock_parse_data.assert_called_once_with(mock_get_data.return_value, "USD")
             pd.testing.assert_frame_equal(result, expected_df)
             mock_logger.assert_called_once_with("Fetching exchange rate data")
+
+    @patch("imf_reader.sdr.read_exchange_rate.parse_data")
+    def test_cache_clear(input_df, mock_parse_data):
+        """
+        Test cache clearing behavior.
+        """
+        with patch(
+            "imf_reader.sdr.read_exchange_rate.get_exchange_rates_data"
+        ) as mock_get_data:
+            # Simulate get_exchange_rates_data returning the input fixture
+            mock_get_data.return_value = input_df
+            mock_parse_data.return_value = pd.DataFrame(
+                {"date": pd.to_datetime(["2023-11-30"]), "exchange_rate": [0.123]}
+            )
+
+            # First call - populates the cache
+            result_1 = fetch_exchange_rates("USD")
+            assert mock_get_data.call_count == 1
+
+            # Second call - returns from cache
+            result_2 = fetch_exchange_rates("USD")
+            assert mock_get_data.call_count == 1  # Still cached
+
+            # Clear the cache
+            clear_cache()
+
+            # Third call - should re-execute
+            result_3 = fetch_exchange_rates("USD")
+            assert mock_get_data.call_count == 2  # Function re-executed
+
+            # Verify results are consistent
+            pd.testing.assert_frame_equal(result_1, result_2)
+            pd.testing.assert_frame_equal(result_1, result_3)
