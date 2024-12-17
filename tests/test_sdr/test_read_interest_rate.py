@@ -11,7 +11,7 @@ from imf_reader.sdr.read_interest_rate import (
     _format_data,
     clean_data,
     fetch_interest_rates,
-    clear_cache
+    clear_cache,
 )
 
 
