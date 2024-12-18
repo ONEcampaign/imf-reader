@@ -10,7 +10,7 @@ from imf_reader.sdr.read_exchange_rate import (
     extract_exchange_series,
     extract_dates_series,
     parse_data,
-    BASE_URL
+    BASE_URL,
 )
 
 

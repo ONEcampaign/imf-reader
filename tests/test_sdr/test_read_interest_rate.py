@@ -10,7 +10,7 @@ from imf_reader.sdr.read_interest_rate import (
     _filter_data,
     _format_data,
     clean_data,
-    fetch_interest_rates
+    fetch_interest_rates,
 )
 
 
