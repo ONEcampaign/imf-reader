@@ -124,9 +124,3 @@ def fetch_interest_rates() -> pd.DataFrame:
     df = clean_data(df)
 
     return df
-
-
-def clear_cache():
-    """Clear the cache for all lru_cache-decorated functions."""
-    fetch_interest_rates.cache_clear()
-    logger.info("Cache cleared")

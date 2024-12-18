@@ -50,3 +50,4 @@ sdr.fetch_exchange_rates("USD")
 from imf_reader.sdr.read_interest_rate import fetch_interest_rates
 from imf_reader.sdr.read_exchange_rate import fetch_exchange_rates
 from imf_reader.sdr.read_announcements import fetch_allocations_holdings
+from imf_reader.sdr.clear_cache import clear_cache

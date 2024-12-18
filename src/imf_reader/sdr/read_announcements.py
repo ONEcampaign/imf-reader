@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 from imf_reader.utils import make_request
-from imf_reader.config import logger, NoDataError
+from imf_reader.config import logger
 
 BASE_URL = "https://www.imf.org/external/np/fin/tad/"
 MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
@@ -104,10 +104,3 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         date = get_latest_date()
 
     return get_holdings_and_allocations_data(*date)
-
-
-def clear_cache():
-    """Clear the cache for all lru_cache-decorated functions."""
-    get_holdings_and_allocations_data.cache_clear()
-    get_latest_date.cache_clear()
-    logger.info("Cache cleared")
