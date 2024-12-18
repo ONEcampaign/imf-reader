@@ -8,32 +8,16 @@ from imf_reader.config import logger
 
 
 def clear_cache():
-    """Clear the cache for all lru_cache-decorated functions."""
+    """Clear the cache for all lru_cache-decorated functions in the 3 sdr modules."""
 
-    cleared_caches = 0
+    # clear cache from read_announcements module
+    get_holdings_and_allocations_data.cache_clear()
+    get_latest_date.cache_clear()
 
-    # read_announcements
-    if (
-        get_holdings_and_allocations_data.cache_info().currsize > 0
-        or get_latest_date.cache_info().currsize > 0
-    ):
-        get_holdings_and_allocations_data.cache_clear()
-        get_latest_date.cache_clear()
-        cleared_caches += 1
-        logger.info("Cache cleared - Holdings and allocations")
+    # clear cache from read_exchange_rate module
+    fetch_exchange_rates.cache_clear()
 
-    # read_exchange_rate
-    if fetch_exchange_rates.cache_info().currsize > 0:
-        fetch_exchange_rates.cache_clear()
-        cleared_caches += 1
-        logger.info("Cache cleared - Exchange rates")
+    # clear cache from read_interest_rate module
+    fetch_interest_rates.cache_clear()
 
-    # read_interest_rate
-    if fetch_interest_rates.cache_info().currsize > 0:
-        fetch_interest_rates.cache_clear()
-        cleared_caches += 1
-        logger.info("Cache cleared - Interest rates")
-
-    if cleared_caches == 0:
-
-        logger.info("Unable to clear cache - No cached data")
+    logger.info("Cache cleared")
