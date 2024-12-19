@@ -112,7 +112,7 @@ class TestReadAnnouncements:
         )
 
         # Call the function
-        result = get_holdings_and_allocations_data(2, 2024)
+        result = get_holdings_and_allocations_data(2024, 2)
 
         # Assertions
         mock_read_tsv.assert_called_once_with(
@@ -128,7 +128,7 @@ class TestReadAnnouncements:
     def test_get_holdings_and_allocations_data_failure(self, mock_read_tsv):
         """Test get_holdings_and_allocations_data raises ValueError when read_tsv fails."""
         with pytest.raises(ValueError, match="Data not available"):
-            get_holdings_and_allocations_data(2, 2024)
+            get_holdings_and_allocations_data(2024, 2)
 
     @patch("imf_reader.sdr.read_announcements.make_request")
     def test_get_latest_date_success(self, mock_make_request):
