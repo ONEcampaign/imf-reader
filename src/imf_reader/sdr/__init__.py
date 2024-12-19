@@ -45,6 +45,12 @@ By default, the exchange rate is in USDs per 1 SDR. To get the exchange rate in 
 sdr.fetch_exchange_rates("USD")
 ```
 
+Clear cached data
+
+```python
+sdr.clear_cache()
+```
+
 """
 
 from imf_reader.sdr.read_interest_rate import fetch_interest_rates

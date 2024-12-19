@@ -55,8 +55,8 @@ def format_date(month: int, year: int) -> str:
 
 @lru_cache
 def get_holdings_and_allocations_data(
-    month: int,
     year: int,
+    month: int,
 ):
     """Get sdr allocations and holdings data for a given month and year"""
 
