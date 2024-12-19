@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import requests
 from unittest.mock import patch, MagicMock, ANY
-from io import BytesIO
+from imf_reader import sdr
 from imf_reader.sdr.read_interest_rate import (
     BASE_URL,
     get_interest_rates_data,
@@ -36,9 +36,9 @@ def input_df():
 class TestReadInterestRate:
 
     @pytest.fixture(autouse=True)
-    def clear_cache(self):
+    def auto_clear_cache(self):
         """Clear cache before each test."""
-        fetch_interest_rates.cache_clear()
+        sdr.clear_cache()
 
     @patch("requests.post")
     def test_get_interest_rates_data(self, mock_post):

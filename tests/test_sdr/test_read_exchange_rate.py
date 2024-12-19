@@ -2,6 +2,7 @@ from unittest.mock import patch, MagicMock, ANY
 import pytest
 import requests
 import pandas as pd
+from imf_reader import sdr
 from imf_reader.sdr.read_exchange_rate import (
     preprocess_data,
     fetch_exchange_rates,
@@ -31,9 +32,9 @@ def input_df():
 class TestExchangeRateModule:
 
     @pytest.fixture(autouse=True)
-    def clear_cache(self):
+    def auto_clear_cache(self):
         """Clear cache before each test."""
-        fetch_exchange_rates.cache_clear()
+        sdr.clear_cache()
 
     @patch("requests.post")
     def test_get_exchange_rates_data_success(self, mock_post):
@@ -190,7 +191,6 @@ class TestExchangeRateModule:
     def test_fetch_exchange_rates(self, mock_parse_data, mock_get_data, input_df):
         """Test fetching exchange rates"""
         # Mock return values for the patched functions
-        mock_get_data.return_value = input_df
         mock_get_data.return_value = input_df
         mock_parse_data.return_value = pd.DataFrame(
             {"date": pd.to_datetime(["2023-11-30"]), "exchange_rate": [0.123]}
