@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 from imf_reader.utils import make_request
-from imf_reader.config import logger, NoDataError
+from imf_reader.config import logger
 
 BASE_URL = "https://www.imf.org/external/np/fin/tad/"
 MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
@@ -54,7 +54,10 @@ def format_date(month: int, year: int) -> str:
 
 
 @lru_cache
-def get_holdings_and_allocations_data(year: int, month: int):
+def get_holdings_and_allocations_data(
+    year: int,
+    month: int,
+):
     """Get sdr allocations and holdings data for a given month and year"""
 
     date = format_date(month, year)
