@@ -1,6 +1,9 @@
 # Changelog
 
-## v1.0.1 (2024-10-11)
+## v1.2.0 (2024-12-20)
+- Add support for fetching Special Drawing Rights (SDR) data
+
+## v1.1.0 (2024-10-11)
 - Improved dtype handling for `fetch_data` function
 - Improved error handling
 - Improved logging
