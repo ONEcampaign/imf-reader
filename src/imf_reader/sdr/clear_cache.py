@@ -8,8 +8,7 @@ from imf_reader.config import logger
 
 
 def clear_cache():
-    """Clear the cache for all SDR data, including holdings and allocations, exchange rates, and interest rates.
-    """
+    """Clear the cache for all SDR data, including holdings and allocations, exchange rates, and interest rates."""
 
     # clear cache from read_announcements module
     get_holdings_and_allocations_data.cache_clear()
