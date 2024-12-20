@@ -12,11 +12,6 @@ A package to access IMF data.
 This package supports access to IMF data with no/limited accessibility through the API,
 including the World Economic Outlook (WEO) database and Special Drawing Rights (SDR) data
 
-
-
-
-
-
 __NOTE__:
 
 This package is designed to scrape data from the IMF website. 
@@ -93,12 +88,12 @@ Import the module
 from imf_reader import sdr
 ```
 
-Read allocations and holdings data
+Read allocations and holdings data.
 
 ```python
 sdr.fetch_allocations_holdings()
 ```
-SDRs holdings and allocations are published at a monthly frequency. The function fetches the latest data available.
+SDRs holdings and allocations are published at a monthly frequency. The function fetches the data for the latest month available.
 
 To retrieve SDR holdings and allocations for a specific month and year, eg April 2021, pass the year and month as a tuple
 
@@ -106,13 +101,13 @@ To retrieve SDR holdings and allocations for a specific month and year, eg April
 sdr.fetch_allocations_holdings((2021, 4))
 ```
 
-Read interest rates
+Read interest rates. This function gets the historical interest rates for SDRs up to the most recent value available.
 
 ```python
 sdr.fetch_interest_rates()
 ```
 
-Read exchange rates
+Read exchange rates. This function gets the historical exchange rates for SDRs up to the most recent value available.
 
 ```python
 sdr.fetch_exchange_rates()
