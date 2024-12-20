@@ -94,10 +94,10 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
     """Fetch SDR holdings and allocations data for a given date
 
     Args:
-        date: A tuple of year and month e.g (2024, 11). If None, the latest data announcements released are fetched
+        date: The year and month to get allocations and holdings data for. e.g. (2024, 11) for November 2024. If None, the latest announcements released are fetched
 
     returns:
-        pd.DataFrame: A dataframe with the SDR data
+        A dataframe with the SDR allocations and holdings data
     """
 
     if date is None:
