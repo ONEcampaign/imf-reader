@@ -1,6 +1,7 @@
 from unittest.mock import patch, Mock
 import pytest
 import pandas as pd
+import logging
 from imf_reader import sdr
 from imf_reader.sdr.read_announcements import (
     read_tsv,
@@ -50,7 +51,7 @@ class TestReadAnnouncements:
     def test_read_tsv_failure(self, mock_read_csv):
         """Test read_tsv raises ValueError on malformed data."""
         mock_read_csv.side_effect = pd.errors.ParserError
-        with pytest.raises(ValueError, match="SDR _data not available for this date"):
+        with pytest.raises(ValueError, match="SDR data not available for this date"):
             read_tsv("mock_url")
 
     def test_clean_df_correct_format(self, input_df):
@@ -128,7 +129,7 @@ class TestReadAnnouncements:
     def test_get_holdings_and_allocations_data_failure(self, mock_read_tsv):
         """Test get_holdings_and_allocations_data raises ValueError when read_tsv fails."""
         with pytest.raises(ValueError, match="Data not available"):
-            get_holdings_and_allocations_data(2024, 2)
+            get_holdings_and_allocations_data(1800, 1)
 
     @patch("imf_reader.sdr.read_announcements.make_request")
     def test_get_latest_date_success(self, mock_make_request):
@@ -192,7 +193,7 @@ class TestReadAnnouncements:
     ):
         """Test fetch_allocations_holdings when no date is provided."""
         # Mock get_latest_allocations_holdings_date to return a specific date
-        mock_get_latest_date.return_value = (2, 2024)
+        mock_get_latest_date.return_value = (2024, 2)
 
         # Mock read_tsv
         mock_read_tsv.return_value = input_df
@@ -217,24 +218,25 @@ class TestReadAnnouncements:
         # Assertions
         mock_get_latest_date.assert_called_once()  # Ensure get_latest_allocations_holdings_date was called
         mock_get_holdings_and_allocations_data.assert_called_once_with(
-            2, 2024
+            2024, 2
         )  # Ensure the correct call
         pd.testing.assert_frame_equal(
             result, cleaned_df
         )  # Ensure the result matches the cleaned data
 
-    @patch("imf_reader.sdr.read_announcements.get_holdings_and_allocations_data")
-    @patch("imf_reader.sdr.read_announcements.get_latest_allocations_holdings_date")
-    def test_fetch_allocations_holdings_failure(
-        self, mock_get_latest_date, mock_get_holdings_data
-    ):
-        """Test fetch_allocations_holdings raises ValueError when data fetching fails."""
-        # Mock get_latest_allocations_holdings_date to return a date
-        mock_get_latest_date.return_value = (2, 2024)
 
-        # Simulate a failure in get_holdings_and_allocations_data
-        mock_get_holdings_data.side_effect = ValueError("Data not available")
+@patch("imf_reader.sdr.read_announcements.get_holdings_and_allocations_data")
+@patch(
+    "imf_reader.sdr.read_announcements.get_latest_allocations_holdings_date",
+    return_value=(2024, 1),
+)
+def test_fetch_allocations_holdings_future_date(
+    mock_get_latest_date, mock_get_holdings_and_allocations_data, caplog
+):
+    with caplog.at_level(logging.INFO):
+        fetch_allocations_holdings((2025, 1))
 
-        # Assertions
-        with pytest.raises(ValueError, match="Data not available"):
-            fetch_allocations_holdings()
+    assert (
+        "SDR data unavailable for date: 2025-1-31. Will fetch latest available"
+        in caplog.text
+    )

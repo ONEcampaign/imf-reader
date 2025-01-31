@@ -25,7 +25,7 @@ def read_tsv(url: str) -> pd.DataFrame:
         return pd.read_csv(url, delimiter="/t", engine="python")
 
     except pd.errors.ParserError:
-        raise ValueError("SDR _data not available for this date")
+        raise ValueError("SDR data not available for this date")
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -94,16 +94,29 @@ def get_latest_allocations_holdings_date() -> tuple[int, int]:
 
 
 def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFrame:
-    """Fetch SDR holdings and allocations data for a given date
+    """
+    Fetch SDR holdings and allocations data for a given date. If date is not specified or exceeds the latest available
+    date, it fetches data for the latest date
 
     Args:
-        date: The year and month to get allocations and holdings data for. e.g. (2024, 11) for November 2024. If None, the latest announcements released are fetched
+        date: The year and month to get allocations and holdings data for. e.g. (2024, 11) for November 2024.
+        If None, the latest announcements released are fetched
 
     returns:
         A dataframe with the SDR allocations and holdings data
     """
 
+    latest_date = get_latest_allocations_holdings_date()
+
     if date is None:
-        date = get_latest_allocations_holdings_date()
+        date = latest_date
+    else:
+        date_obj = datetime(date[0], date[1], 1)
+        latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
+        if date_obj > latest_date_obj:
+            logger.info(
+                f"SDR data unavailable for date: {format_date(date[1],date[0])}. Will fetch latest available"
+            )
+            date = latest_date
 
     return get_holdings_and_allocations_data(*date)
