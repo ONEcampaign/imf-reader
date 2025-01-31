@@ -233,6 +233,7 @@ class TestReadAnnouncements:
 def test_fetch_allocations_holdings_future_date(
     mock_get_latest_date, mock_get_holdings_and_allocations_data, caplog
 ):
+    """Test fetch_allocations_holdings when unavailable future date is provided."""
     with caplog.at_level(logging.INFO):
         fetch_allocations_holdings((2025, 1))
 
