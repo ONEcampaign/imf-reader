@@ -20,7 +20,12 @@ Read allocations and holdings data
 ```python
 sdr.fetch_allocations_holdings()
 ```
-SDRs holdings and allocations are published at a monthly frequency. The function fetches the latest data available.
+SDRs holdings and allocations are published at a monthly frequency. The function fetches the latest data available by
+default. Check the latest available date
+
+```python
+sdr.get_latest_allocations_holdings_date()
+```
 
 To retrieve SDR holdings and allocations for a specific month and year, eg April 2021, pass the year and month as a tuple
 
@@ -55,5 +60,8 @@ sdr.clear_cache()
 
 from imf_reader.sdr.read_interest_rate import fetch_interest_rates
 from imf_reader.sdr.read_exchange_rate import fetch_exchange_rates
-from imf_reader.sdr.read_announcements import fetch_allocations_holdings
+from imf_reader.sdr.read_announcements import (
+    fetch_allocations_holdings,
+    get_latest_allocations_holdings_date,
+)
 from imf_reader.sdr.clear_cache import clear_cache

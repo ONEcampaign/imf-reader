@@ -1,6 +1,6 @@
 from imf_reader.sdr.read_announcements import (
     get_holdings_and_allocations_data,
-    get_latest_date,
+    get_latest_allocations_holdings_date,
 )
 from imf_reader.sdr.read_exchange_rate import fetch_exchange_rates
 from imf_reader.sdr.read_interest_rate import fetch_interest_rates
@@ -12,7 +12,7 @@ def clear_cache():
 
     # clear cache from read_announcements module
     get_holdings_and_allocations_data.cache_clear()
-    get_latest_date.cache_clear()
+    get_latest_allocations_holdings_date.cache_clear()
 
     # clear cache from read_exchange_rate module
     fetch_exchange_rates.cache_clear()

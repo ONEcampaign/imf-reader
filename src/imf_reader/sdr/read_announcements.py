@@ -73,9 +73,13 @@ def get_holdings_and_allocations_data(
 
 
 @lru_cache
-def get_latest_date() -> tuple[int, int]:
-    """Get the latest date for which SDR data is available"""
+def get_latest_allocations_holdings_date() -> tuple[int, int]:
+    """
+    Get the latest available SDR allocation holdings date.
 
+    Returns:
+        tuple[int, int]: A tuple containing the year and month of the latest SDR data.
+    """
     logger.info("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
@@ -86,7 +90,6 @@ def get_latest_date() -> tuple[int, int]:
     date = row.td.text.strip()
     date = datetime.strptime(date, "%B %d, %Y")
 
-    # Extract the year and month as a tuple
     return date.year, date.month
 
 
@@ -101,6 +104,6 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
     """
 
     if date is None:
-        date = get_latest_date()
+        date = get_latest_allocations_holdings_date()
 
     return get_holdings_and_allocations_data(*date)

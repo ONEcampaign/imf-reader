@@ -7,7 +7,7 @@ from imf_reader.sdr.read_announcements import (
     clean_df,
     format_date,
     get_holdings_and_allocations_data,
-    get_latest_date,
+    get_latest_allocations_holdings_date,
     fetch_allocations_holdings,
     BASE_URL,
     MAIN_PAGE_URL,
@@ -132,7 +132,7 @@ class TestReadAnnouncements:
 
     @patch("imf_reader.sdr.read_announcements.make_request")
     def test_get_latest_date_success(self, mock_make_request):
-        """Test get_latest_date successfully returns the latest date."""
+        """Test get_latest_allocations_holdings_date successfully returns the latest date."""
 
         # Mock HTML content
         mock_html_content = """
@@ -159,7 +159,7 @@ class TestReadAnnouncements:
         mock_make_request.return_value = mock_response
 
         # Call the function
-        result = get_latest_date()
+        result = get_latest_allocations_holdings_date()
 
         # Assertions
         mock_make_request.assert_called_once_with(MAIN_PAGE_URL)
@@ -167,7 +167,7 @@ class TestReadAnnouncements:
 
     @patch("imf_reader.sdr.read_announcements.make_request")
     def test_get_latest_date_invalid_html(self, mock_make_request):
-        """Test get_latest_date raises an error when HTML parsing fails."""
+        """Test get_latest_allocations_holdings_date raises an error when HTML parsing fails."""
 
         # Mock malformed HTML content
         mock_response = Mock()
@@ -176,9 +176,9 @@ class TestReadAnnouncements:
 
         # Call the function and expect an IndexError
         with pytest.raises(IndexError):
-            get_latest_date()
+            get_latest_allocations_holdings_date()
 
-    @patch("imf_reader.sdr.read_announcements.get_latest_date")
+    @patch("imf_reader.sdr.read_announcements.get_latest_allocations_holdings_date")
     @patch("imf_reader.sdr.read_announcements.clean_df")
     @patch("imf_reader.sdr.read_announcements.read_tsv")
     @patch("imf_reader.sdr.read_announcements.get_holdings_and_allocations_data")
@@ -191,7 +191,7 @@ class TestReadAnnouncements:
         input_df,
     ):
         """Test fetch_allocations_holdings when no date is provided."""
-        # Mock get_latest_date to return a specific date
+        # Mock get_latest_allocations_holdings_date to return a specific date
         mock_get_latest_date.return_value = (2, 2024)
 
         # Mock read_tsv
@@ -215,7 +215,7 @@ class TestReadAnnouncements:
         result = fetch_allocations_holdings()
 
         # Assertions
-        mock_get_latest_date.assert_called_once()  # Ensure get_latest_date was called
+        mock_get_latest_date.assert_called_once()  # Ensure get_latest_allocations_holdings_date was called
         mock_get_holdings_and_allocations_data.assert_called_once_with(
             2, 2024
         )  # Ensure the correct call
@@ -224,12 +224,12 @@ class TestReadAnnouncements:
         )  # Ensure the result matches the cleaned data
 
     @patch("imf_reader.sdr.read_announcements.get_holdings_and_allocations_data")
-    @patch("imf_reader.sdr.read_announcements.get_latest_date")
+    @patch("imf_reader.sdr.read_announcements.get_latest_allocations_holdings_date")
     def test_fetch_allocations_holdings_failure(
         self, mock_get_latest_date, mock_get_holdings_data
     ):
         """Test fetch_allocations_holdings raises ValueError when data fetching fails."""
-        # Mock get_latest_date to return a date
+        # Mock get_latest_allocations_holdings_date to return a date
         mock_get_latest_date.return_value = (2, 2024)
 
         # Simulate a failure in get_holdings_and_allocations_data
