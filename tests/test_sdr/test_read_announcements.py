@@ -7,7 +7,7 @@ from imf_reader.sdr.read_announcements import (
     clean_df,
     format_date,
     get_holdings_and_allocations_data,
-    get_latest_date,
+    get_latest_allocations_holdings_date,
     fetch_allocations_holdings,
     BASE_URL,
     MAIN_PAGE_URL,
@@ -159,7 +159,7 @@ class TestReadAnnouncements:
         mock_make_request.return_value = mock_response
 
         # Call the function
-        result = get_latest_date()
+        result = get_latest_allocations_holdings_date()
 
         # Assertions
         mock_make_request.assert_called_once_with(MAIN_PAGE_URL)
@@ -176,7 +176,7 @@ class TestReadAnnouncements:
 
         # Call the function and expect an IndexError
         with pytest.raises(IndexError):
-            get_latest_date()
+            get_latest_allocations_holdings_date()
 
     @patch("imf_reader.sdr.read_announcements.get_latest_date")
     @patch("imf_reader.sdr.read_announcements.clean_df")
