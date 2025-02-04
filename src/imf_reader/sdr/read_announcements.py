@@ -73,14 +73,16 @@ def get_holdings_and_allocations_data(
 
 
 @lru_cache
-def get_latest_allocations_holdings_date() -> tuple[int, int]:
+def get_latest_allocations_holdings_date(log_info=True) -> tuple[int, int]:
     """
     Get the latest available SDR allocation holdings date.
-
+    Args:
+        log_info (bool, optional): If True, log info about the download. Defaults to True.
     Returns:
         tuple[int, int]: A tuple containing the year and month of the latest SDR data.
     """
-    logger.info("Fetching latest date")
+    if log_info:
+        logger.info("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -106,17 +108,13 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         A dataframe with the SDR allocations and holdings data
     """
 
-    latest_date = get_latest_allocations_holdings_date()
-
     if date is None:
-        date = latest_date
+        date = get_latest_allocations_holdings_date()
     else:
+        latest_date = get_latest_allocations_holdings_date(log_info=False)
         date_obj = datetime(date[0], date[1], 1)
         latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
         if date_obj > latest_date_obj:
-            logger.info(
-                f"SDR data unavailable for date: {format_date(date[1],date[0])}. Will fetch latest available"
-            )
-            date = latest_date
+            raise ValueError(f"SDR data unavailable for: ({date[0]}, {date[1]}).\nLatest available: ({latest_date[0]}, {latest_date[1]})")
 
     return get_holdings_and_allocations_data(*date)

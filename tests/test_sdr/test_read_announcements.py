@@ -1,7 +1,7 @@
 from unittest.mock import patch, Mock
 import pytest
 import pandas as pd
-import logging
+import re
 from imf_reader import sdr
 from imf_reader.sdr.read_announcements import (
     read_tsv,
@@ -231,13 +231,8 @@ class TestReadAnnouncements:
     return_value=(2024, 1),
 )
 def test_fetch_allocations_holdings_future_date(
-    mock_get_latest_date, mock_get_holdings_and_allocations_data, caplog
+        mock_get_latest_date, mock_get_holdings_and_allocations_data
 ):
     """Test fetch_allocations_holdings when unavailable future date is provided."""
-    with caplog.at_level(logging.INFO):
+    with pytest.raises(ValueError, match=re.escape("SDR data unavailable for: (2025, 1).\nLatest available: (2024, 1)")):
         fetch_allocations_holdings((2025, 1))
-
-    assert (
-        "SDR data unavailable for date: 2025-1-31. Will fetch latest available"
-        in caplog.text
-    )
