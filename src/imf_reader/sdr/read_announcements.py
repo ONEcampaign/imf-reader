@@ -115,6 +115,8 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         date_obj = datetime(date[0], date[1], 1)
         latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
         if date_obj > latest_date_obj:
-            raise ValueError(f"SDR data unavailable for: ({date[0]}, {date[1]}).\nLatest available: ({latest_date[0]}, {latest_date[1]})")
+            raise ValueError(
+                f"SDR data unavailable for: ({date[0]}, {date[1]}).\nLatest available: ({latest_date[0]}, {latest_date[1]})"
+            )
 
     return get_holdings_and_allocations_data(*date)

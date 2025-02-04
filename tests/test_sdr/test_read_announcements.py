@@ -231,8 +231,13 @@ class TestReadAnnouncements:
     return_value=(2024, 1),
 )
 def test_fetch_allocations_holdings_future_date(
-        mock_get_latest_date, mock_get_holdings_and_allocations_data
+    mock_get_latest_date, mock_get_holdings_and_allocations_data
 ):
     """Test fetch_allocations_holdings when unavailable future date is provided."""
-    with pytest.raises(ValueError, match=re.escape("SDR data unavailable for: (2025, 1).\nLatest available: (2024, 1)")):
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "SDR data unavailable for: (2025, 1).\nLatest available: (2024, 1)"
+        ),
+    ):
         fetch_allocations_holdings((2025, 1))
