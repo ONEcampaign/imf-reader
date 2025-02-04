@@ -80,7 +80,7 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     Returns:
         tuple[int, int]: A tuple containing the year and month of the latest SDR data.
     """
-    
+
     logger.info("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
