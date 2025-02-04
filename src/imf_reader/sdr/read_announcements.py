@@ -10,6 +10,7 @@ import pandas as pd
 import calendar
 from bs4 import BeautifulSoup
 from datetime import datetime
+import logging
 
 from imf_reader.utils import make_request
 from imf_reader.config import logger
@@ -19,7 +20,7 @@ MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
 
 
 def read_tsv(url: str) -> pd.DataFrame:
-    """Read a tsv file from a url and return a dataframe"""
+    """Read a tsv file from url and return a dataframe"""
 
     try:
         return pd.read_csv(url, delimiter="/t", engine="python")
@@ -73,16 +74,14 @@ def get_holdings_and_allocations_data(
 
 
 @lru_cache
-def get_latest_allocations_holdings_date(log_info=True) -> tuple[int, int]:
+def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     """
     Get the latest available SDR allocation holdings date.
-    Args:
-        log_info (bool, optional): If True, log info about the download. Defaults to True.
     Returns:
         tuple[int, int]: A tuple containing the year and month of the latest SDR data.
     """
-    if log_info:
-        logger.info("Fetching latest date")
+    
+    logger.info("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -109,9 +108,13 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
     """
 
     if date is None:
-        date = get_latest_allocations_holdings_date()
+        date = fetch_latest_allocations_holdings_date()
     else:
-        latest_date = get_latest_allocations_holdings_date(log_info=False)
+        # Temporarily disable logging while calling fetch_latest_allocations_holdings_date()
+        logger.setLevel(logging.WARNING)
+        latest_date = fetch_latest_allocations_holdings_date()
+        logger.setLevel(logging.INFO)
+
         date_obj = datetime(date[0], date[1], 1)
         latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
         if date_obj > latest_date_obj:

@@ -8,7 +8,7 @@ from imf_reader.sdr.clear_cache import clear_cache
     "imf_reader.sdr.read_announcements.get_holdings_and_allocations_data.cache_clear"
 )
 @patch(
-    "imf_reader.sdr.read_announcements.get_latest_allocations_holdings_date.cache_clear"
+    "imf_reader.sdr.read_announcements.fetch_latest_allocations_holdings_date.cache_clear"
 )
 @patch("imf_reader.sdr.read_exchange_rate.fetch_exchange_rates.cache_clear")
 @patch("imf_reader.sdr.read_interest_rate.fetch_interest_rates.cache_clear")
