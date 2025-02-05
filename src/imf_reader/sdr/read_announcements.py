@@ -111,9 +111,10 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         date = fetch_latest_allocations_holdings_date()
     else:
         # Temporarily disable logging while calling fetch_latest_allocations_holdings_date()
+        original_logger_level = logger.level
         logger.setLevel(logging.WARNING)
         latest_date = fetch_latest_allocations_holdings_date()
-        logger.setLevel(logging.INFO)
+        logger.setLevel(original_logger_level)
 
         date_obj = datetime(date[0], date[1], 1)
         latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
