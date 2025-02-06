@@ -10,6 +10,7 @@ import pandas as pd
 import calendar
 from bs4 import BeautifulSoup
 from datetime import datetime
+import logging
 
 from imf_reader.utils import make_request
 from imf_reader.config import logger
@@ -19,13 +20,13 @@ MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
 
 
 def read_tsv(url: str) -> pd.DataFrame:
-    """Read a tsv file from a url and return a dataframe"""
+    """Read a tsv file from url and return a dataframe"""
 
     try:
         return pd.read_csv(url, delimiter="/t", engine="python")
 
     except pd.errors.ParserError:
-        raise ValueError("SDR _data not available for this date")
+        raise ValueError("SDR data not available for this date")
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -73,13 +74,13 @@ def get_holdings_and_allocations_data(
 
 
 @lru_cache
-def get_latest_allocations_holdings_date() -> tuple[int, int]:
+def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     """
     Get the latest available SDR allocation holdings date.
-
     Returns:
         tuple[int, int]: A tuple containing the year and month of the latest SDR data.
     """
+
     logger.info("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
@@ -94,16 +95,31 @@ def get_latest_allocations_holdings_date() -> tuple[int, int]:
 
 
 def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFrame:
-    """Fetch SDR holdings and allocations data for a given date
+    """
+    Fetch SDR holdings and allocations data for a given date. If date is not specified, it fetches data for the latest date
 
     Args:
-        date: The year and month to get allocations and holdings data for. e.g. (2024, 11) for November 2024. If None, the latest announcements released are fetched
+        date: tuple[int, int]. The year and month to get allocations and holdings data for. e.g. (2024, 11) for November 2024.
+        If None, the latest announcements released are fetched.
 
     returns:
         A dataframe with the SDR allocations and holdings data
     """
 
     if date is None:
-        date = get_latest_allocations_holdings_date()
+        date = fetch_latest_allocations_holdings_date()
+    else:
+        # Temporarily disable logging while calling fetch_latest_allocations_holdings_date()
+        original_logger_level = logger.level
+        logger.setLevel(logging.WARNING)
+        latest_date = fetch_latest_allocations_holdings_date()
+        logger.setLevel(original_logger_level)
+
+        date_obj = datetime(date[0], date[1], 1)
+        latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
+        if date_obj > latest_date_obj:
+            raise ValueError(
+                f"SDR data unavailable for: ({date[0]}, {date[1]}).\nLatest available: ({latest_date[0]}, {latest_date[1]})"
+            )
 
     return get_holdings_and_allocations_data(*date)

@@ -97,7 +97,7 @@ SDRs holdings and allocations are published at a monthly frequency. The function
 default. Check the latest available date
 
 ```python
-sdr.get_latest_allocations_holdings_date()
+sdr.fetch_latest_allocations_holdings_date()
 ```
 
 To retrieve SDR holdings and allocations for a specific month and year, eg April 2021, pass the year and month as a tuple

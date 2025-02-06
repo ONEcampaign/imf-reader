@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.0 (2025-2-05)
+- Made function available to fetch latest holdings and allocations date
+- Improved handling of unavailable dates
+
 ## v1.2.0 (2024-12-20)
 - Add support for fetching Special Drawing Rights (SDR) data
 
@@ -18,5 +22,4 @@
 - Basic functionality for accessing WEO data for initial testing
 
 ## v0.0.1 (2024-05-17)
-
 - First release of `imf-reader`
