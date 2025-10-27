@@ -4,144 +4,138 @@
 [![codecov](https://codecov.io/gh/ONEcampaign/imf-reader/branch/main/graph/badge.svg?token=YN8S1719NH)](https://codecov.io/gh/ONEcampaign/imf-reader)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-
 # imf-reader
 
-A package to access IMF data. 
+**Simple Python access to IMF economic data.**
 
-This package supports access to IMF data with no/limited accessibility through the API,
-including the World Economic Outlook (WEO) database and Special Drawing Rights (SDR) data
+Access the World Economic Outlook (WEO) database and Special Drawing Rights (SDR) data programmatically. Get macroeconomic indicators, forecasts, SDR allocations, interest rates, and exchange rates—all as clean pandas DataFrames.
 
-__NOTE__:
+## Quick Start
 
-This package is designed to scrape data from the IMF website. 
-The IMF does not provide an official API for accessing WEO data yet. As a result, 
-the tools in this package are subject to breakage if the IMF changes the structure of their website,
-or releases corrupted data files or unexpected data formats. Please report any issues you encounter.
-
-## Installation
+Install with uv:
 
 ```bash
-$ pip install imf-reader
+uv pip install imf-reader
 ```
 
-## Usage
+Or with pip:
 
-### 1. World Economic Outlook (WEO) data
+```bash
+pip install imf-reader
+```
 
-WEO data is accessed through SDMX (Statistical Data and Metadata eXchange) files published by the IMF.
-For more information on SDMX, please visit the [SDMX.org](https://sdmx.org/).
+Fetch your first dataset:
 
-Tools to access WEO data can be found in the `weo` module.
-Import the `weo` module and call the `fetch_data` function to retrieve the latest WEO data.
+```python
+from imf_reader import weo, sdr
+
+# Get World Economic Outlook data
+weo_data = weo.fetch_data()
+
+# Get SDR allocations
+sdr_data = sdr.fetch_allocations_holdings()
+```
+
+## What You Can Access
+
+### World Economic Outlook (WEO)
+- Macroeconomic indicators for ~200 countries
+- GDP, inflation, unemployment, government finances, and 40+ indicators
+- Historical data and forecasts
+- Published twice yearly (April and October)
+
+### Special Drawing Rights (SDR)
+- Monthly allocations and holdings by country
+- Historical interest rates (since 1969)
+- Daily exchange rates (since 1981)
+- SDR/USD and USD/SDR conversions
+
+## Key Features
+
+- **Simple API**: Just a few functions to learn
+- **Pandas DataFrames**: Data returned in familiar format
+- **Smart caching**: Fast repeated access with LRU cache
+- **Automatic version handling**: Falls back gracefully when latest data isn't available
+- **Type hints**: Full type annotations for better IDE support
+
+## Documentation
+
+📚 **[Read the full documentation](https://imf-reader.readthedocs.io/)**
+
+- **[Getting Started](https://imf-reader.readthedocs.io/getting-started/)** - Installation and first examples
+- **[WEO Data Guide](https://imf-reader.readthedocs.io/weo-data/)** - Access macroeconomic indicators
+- **[SDR Data Guide](https://imf-reader.readthedocs.io/sdr-allocations/)** - Track international reserves
+- **[Advanced Usage](https://imf-reader.readthedocs.io/advanced-usage/)** - Caching, error handling, and production patterns
+
+## Example Usage
+
+### Fetch and filter WEO data
 
 ```python
 from imf_reader import weo
 
+# Get the latest WEO release
 df = weo.fetch_data()
-print(df)
 
+# Filter for GDP data for specific countries
+gdp_data = df[
+    (df['CONCEPT_CODE'] == 'NGDPD') &
+    (df['REF_AREA_LABEL'].isin(['United States', 'China', 'Germany']))
+]
+
+print(gdp_data[['REF_AREA_LABEL', 'TIME_PERIOD', 'OBS_VALUE']])
 ```
 
-By default, the function will return the WEO data for the latest year available.
-You can specify a version by passing the month and year of the version you want to retrieve.
-NOTE: The WEO reports are released in April and October of each year. The month of the version must 
-be either "April" or "October".
-
-```python
-df = weo.fetch_data(version=("April", 2020))
-```
-
-If the version of the data fetched is needed, it can be 
-retrieved from the function attribute `last_version_fetched`.
-
-```python
-df = weo.fetch_data()
-print(weo.fetch_data.last_version_fetched)
-# >>> ('April', 2024) or whichever version was just fetched
-```
-
-
-Caching is used to avoid multiple requests to the IMF website for the same data and to enhance performance. 
-Caching using the LRU (Least Recently Used) algorithm approach and stores data in RAM. The cache is cleared when the program is terminated.
-To clear the cache manually, use the `clear_cache` function.
-
-```python
-weo.clear_cache()
-```
-
-
-For more advanced usage and tools for WEO data please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
-
-
-### 2. Special Drawing Rights (SDR) data
-
-The SDR is an international reserve asset created by the IMF in 1969.
-It is not a currency, but the holder of SDRs can exchange them for usable currencies in times of need.
-
-Read more about SDRs at: https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr
-
-
-Import the module
+### Get SDR holdings and exchange rates
 
 ```python
 from imf_reader import sdr
+
+# Get latest SDR allocations and holdings
+allocations = sdr.fetch_allocations_holdings()
+
+# Get current SDR exchange rate
+exchange_rates = sdr.fetch_exchange_rates()
+
+# Calculate USD value of holdings
+usd_per_sdr = exchange_rates.iloc[-1]['exchange_rate']
+allocations['usd_value'] = allocations['value'].astype(float) * usd_per_sdr
 ```
 
-Read allocations and holdings data.
+### Fetch specific WEO version
 
 ```python
-sdr.fetch_allocations_holdings()
-```
-SDRs holdings and allocations are published at a monthly frequency. The function fetches the latest data available by
-default. Check the latest available date
+from imf_reader import weo
 
-```python
-sdr.fetch_latest_allocations_holdings_date()
-```
+# Get October 2024 WEO release
+df_oct = weo.fetch_data(version=("October", 2024))
 
-To retrieve SDR holdings and allocations for a specific month and year, eg April 2021, pass the year and month as a tuple
-
-```python
-sdr.fetch_allocations_holdings((2021, 4))
+# Get April 2025 release
+df_apr = weo.fetch_data(version=("April", 2025))
 ```
 
-Read interest rates. This function gets the historical interest rates for SDRs up to the most recent value available.
+## Requirements
 
-```python
-sdr.fetch_interest_rates()
-```
+- Python 3.10 or higher
+- pandas, requests, beautifulsoup4 (installed automatically)
 
-Read exchange rates. This function gets the historical exchange rates for SDRs up to the most recent value available.
+## Important Note
 
-```python
-sdr.fetch_exchange_rates()
-```
-By default, the exchange rate is in USDs per 1 SDR. To get the exchange rate in SDRs per 1 USD, pass the unit basis as "USD"
-
-```python
-sdr.fetch_exchange_rates("USD")
-```
-
-To clear cached data use the `clear_cache` function.
-
-```python
-sdr.clear_cache()
-```
-
+This package uses web scraping for datasets without official APIs. While we strive to maintain compatibility, changes to IMF website structure may temporarily affect functionality. The package includes automatic version fallback for improved reliability.
 
 ## Contributing
 
-This package relies on webscraping techniques to access data from the source. It is likely
-that the functionality of this package will break if the IMF changes the structure of their website
-or their data files. If you encounter any issues, please report them.
+We welcome contributions! See our [Contributing Guide](https://imf-reader.readthedocs.io/contributing/) for details on:
 
-Interested in contributing? Check out the contributing guidelines. Please note that this project is released with a Code of Conduct. By contributing to this project, you agree to abide by its terms.
+- Reporting bugs
+- Suggesting features
+- Contributing code
+- Improving documentation
 
 ## License
 
-`imf-reader` was initially created by Luca Picci and is maintained by the ONE Campaign. It is licensed under the terms of the MIT license.
+`imf-reader` was initially created by Luca Picci and is maintained by [The ONE Campaign](https://www.one.org/). Licensed under the MIT License.
 
 ## Credits
 
-`imf-reader` was created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
+Created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
