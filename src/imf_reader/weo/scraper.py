@@ -54,7 +54,7 @@ class SDMXScraper:
             raise NoDataError("SDMX data not found")
 
         logger.debug("SDMX URL found")
-        return f"{BASE_URL}{href}"
+        return f"{href}"
 
     @staticmethod
     def get_sdmx_folder(sdmx_url: str) -> ZipFile:
