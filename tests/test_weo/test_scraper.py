@@ -41,7 +41,7 @@ class TestSDMXScraper:
 
         # test expected behavior
         result = scraper.SDMXScraper.get_sdmx_url(mock_soup)
-        assert result == "https://www.imf.org/test/url"
+        assert result == "test/url"
 
         # Test when href is None
         mock_soup.find.return_value.get.return_value = None
