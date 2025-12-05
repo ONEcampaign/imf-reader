@@ -1,6 +1,5 @@
 """Functions to scrape the IMF WEO website"""
 
-import requests
 from bs4 import BeautifulSoup
 import io
 from zipfile import ZipFile, BadZipFile

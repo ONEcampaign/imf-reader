@@ -28,7 +28,7 @@ class TestSDMXParser:
                 "xmlns:xml": "http://www.w3.org/XML/1998/namespace",
             },
         )
-        header = ET.SubElement(root, "message:Header")
+        ET.SubElement(root, "message:Header")
         dataset = ET.SubElement(
             root,
             "message:DataSet",
@@ -51,7 +51,7 @@ class TestSDMXParser:
                 "NOTES": "See notes for:  Gross domestic product, constant prices (National currency) Gross domestic product, current prices (National currency).",
             },
         )
-        obs = ET.SubElement(
+        ET.SubElement(
             series, "Obs", attrib={"TIME_PERIOD": "1980", "OBS_VALUE": "39.372"}
         )
 
@@ -203,17 +203,6 @@ class TestSDMXParser:
 
         # Call the clean_numeric_columns method
         result_df = SDMXParser.clean_numeric_columns(data_df)
-
-        # Create the expected DataFrame
-        expected_df = pd.DataFrame(
-            {
-                "REF_AREA_CODE": [1, 2, pd.NA, pd.NA],
-                "OBS_VALUE": [1.1, 2123.2, pd.NA, pd.NA],
-                "SCALE_CODE": [3, 4, pd.NA, pd.NA],
-                "LASTACTUALDATE": [2023, 2024, pd.NA, pd.NA],
-                "TIME_PERIOD": [1980, 1981, pd.NA, pd.NA],
-            }
-        )
 
         # Assert that the columns are numeric
         for column in result_df.columns:

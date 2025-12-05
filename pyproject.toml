@@ -11,8 +11,6 @@ dependencies = [
     "requests>=2.32.1",
     "chardet>=5.2.0",
     "beautifulsoup4>=4.12.3",
-    "sdmx1>=2.23.1",
-    "packaging>=24.0",  # required by sdmx1 but not declared
     "diskcache>=5.6.0",
 ]
 
