@@ -164,10 +164,9 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
     # Only apply where SCALE_CODE is present and > 0
     scale_exponent = pd.to_numeric(df["SCALE_CODE"], errors="coerce")
     has_scale = scale_exponent.notna() & (scale_exponent > 0)
-    df.loc[has_scale, "OBS_VALUE"] = (
-        pd.to_numeric(df.loc[has_scale, "OBS_VALUE"], errors="coerce")
-        / (10 ** scale_exponent[has_scale])
-    )
+    df.loc[has_scale, "OBS_VALUE"] = pd.to_numeric(
+        df.loc[has_scale, "OBS_VALUE"], errors="coerce"
+    ) / (10 ** scale_exponent[has_scale])
 
     # Convert SCALE_CODE from exponent to multiplier to match legacy format
     df["SCALE_CODE"] = scale_exponent.map(SCALE_MULTIPLIERS)
