@@ -18,6 +18,13 @@ SCALE_LABELS = {
     9: "Billions",
 }
 
+# Map scale exponents to multipliers (for converting to legacy format)
+SCALE_MULTIPLIERS = {
+    0: 1,
+    6: 1_000_000,
+    9: 1_000_000_000,
+}
+
 # Cache configuration
 _CACHE_DIR = Path.home() / ".cache" / "imf_reader" / "weo"
 _CACHE_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
@@ -147,6 +154,23 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
     # Add missing columns with empty data for backward compatibility
     df["LASTACTUALDATE"] = pd.array([pd.NA] * len(df), dtype="Int64")
     df["NOTES"] = pd.array([pd.NA] * len(df), dtype="string")
+
+    # Convert values to match legacy format:
+    # - Legacy format stores OBS_VALUE "in scale" (e.g., 447.416 for 447.416 billion)
+    # - New API returns OBS_VALUE in units (e.g., 447416000000.0)
+    # - Legacy SCALE_CODE is the multiplier (e.g., 1000000000), not the exponent (e.g., 9)
+
+    # First, convert OBS_VALUE from units to "in scale" by dividing by 10^SCALE_CODE
+    # Only apply where SCALE_CODE is present and > 0
+    scale_exponent = pd.to_numeric(df["SCALE_CODE"], errors="coerce")
+    has_scale = scale_exponent.notna() & (scale_exponent > 0)
+    df.loc[has_scale, "OBS_VALUE"] = (
+        pd.to_numeric(df.loc[has_scale, "OBS_VALUE"], errors="coerce")
+        / (10 ** scale_exponent[has_scale])
+    )
+
+    # Convert SCALE_CODE from exponent to multiplier to match legacy format
+    df["SCALE_CODE"] = scale_exponent.map(SCALE_MULTIPLIERS)
 
     # Fix data types to match old parser
     # Numeric columns

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 (2025-12-05)
+- The new API implements a different scaling value behaviour. To preserve backwards compatibility, this new version 
+aligns with the old behaviour.
+
 ## v1.4.0 (2025-12-05)
 - The October 2025 release of WEO removed bulk downloads and moved everything towards the SDMX API. This update provides a way to parse new releases from the API instead of relying on the XML files. Note that thew new API response does not include observation-level notes or information on when projections start for each country-indicator.
 
