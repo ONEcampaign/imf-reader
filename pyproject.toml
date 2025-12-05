@@ -1,6 +1,6 @@
 [project]
 name = "imf-reader"
-version = "1.4.0"
+version = "1.4.1"
 description = "A package to access imf data"
 authors = [{ name = "The ONE Campaign" }]
 license = { text = "MIT" }
