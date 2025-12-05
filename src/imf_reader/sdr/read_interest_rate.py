@@ -1,6 +1,4 @@
-"""Module to read SDR interest and exchange rates from the IMF website
-
-"""
+"""Module to read SDR interest and exchange rates from the IMF website"""
 
 import requests
 import pandas as pd

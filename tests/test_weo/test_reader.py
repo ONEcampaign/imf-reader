@@ -65,38 +65,41 @@ def test_roll_back_version():
         reader.roll_back_version(("March", 2024))
 
 
-@patch("imf_reader.weo.reader._fetch")
-def test_fetch_data(mock_fetch):
+@patch("imf_reader.weo.reader.get_weo_versions")
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data(mock_get_weo_data, mock_get_weo_versions):
     """Test for fetch_data method."""
 
-    # Mock the _fetch function to return a specific DataFrame
+    # Mock the get_weo_data function to return a specific DataFrame
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
-    mock_fetch.return_value = mock_data
+    mock_get_weo_data.return_value = mock_data
+    mock_get_weo_versions.return_value = [("October", 2025), ("April", 2025)]
 
     # Test that the function correctly fetches data when a version is passed
     pd.testing.assert_frame_equal(reader.fetch_data(("April", 2024)), mock_data)
-    # check that validate_version is called
-    mock_fetch.assert_called_once_with(("April", 2024))
+    mock_get_weo_data.assert_called_with(("April", 2024))
 
-    # when no version is passed, check that gen_latest_version is called
+    # when no version is passed, check that get_weo_versions is called for latest
+    mock_get_weo_data.reset_mock()
     reader.fetch_data()
-    mock_fetch.assert_called_with(reader.gen_latest_version())
+    mock_get_weo_versions.assert_called()
+    mock_get_weo_data.assert_called_with(("October", 2025))
 
 
-@patch("imf_reader.weo.reader.gen_latest_version")
-@patch("imf_reader.weo.reader._fetch")
-def test_fetch_data_attribute(mock_fetch, mock_gen_latest_version):
+@patch("imf_reader.weo.reader.get_weo_versions")
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
     """Test for fetch_data method attribute."""
 
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
-    mock_fetch.return_value = mock_data
-    mock_gen_latest_version.return_value = ("April", 2024)
+    mock_get_weo_data.return_value = mock_data
+    mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
     # when a version is passed, check that the attribute is set
     reader.fetch_data(("April", 2022))
     assert reader.fetch_data.last_version_fetched == ("April", 2022)
 
-    # when no version is passed, check that the attribute is set
+    # when no version is passed, check that the attribute is set to latest
     reader.fetch_data()
     assert reader.fetch_data.last_version_fetched == ("April", 2024)
 
@@ -114,14 +117,18 @@ def test_clear_cache(mock_cache_clear):
 
 @patch("imf_reader.weo.reader._fetch")
 @patch("imf_reader.weo.reader.roll_back_version")
-@patch("imf_reader.weo.reader.gen_latest_version")
+@patch("imf_reader.weo.reader.get_weo_versions")
+@patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data_handles_NoDataError(
-    mock_gen_latest_version, mock_roll_back_version, mock_fetch
+    mock_get_weo_data, mock_get_weo_versions, mock_roll_back_version, mock_fetch
 ):
-    """Test for fetch_data method when the version needs to be rolled back"""
+    """Test for fetch_data method when the API fails and falls back to scraper with rollback"""
 
-    # Mock the gen_latest_version function to return a specific version
-    mock_gen_latest_version.return_value = ("April", 2024)
+    # Mock get_weo_versions to return a specific version list
+    mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
+
+    # Mock get_weo_data to raise ValueError (version not in API)
+    mock_get_weo_data.side_effect = ValueError("Version not available")
 
     # Mock the _fetch function to raise a NoDataError for the first call and return a DataFrame for the second call
     mock_fetch.side_effect = [
@@ -135,13 +142,13 @@ def test_fetch_data_handles_NoDataError(
     # Call the fetch_data function without passing a version
     df = reader.fetch_data()
 
-    # Check that gen_latest_version was called once
-    mock_gen_latest_version.assert_called_once()
+    # Check that get_weo_versions was called to get latest version
+    mock_get_weo_versions.assert_called()
 
     # Check that _fetch was called twice (once for the initial call and once after the NoDataError)
     assert mock_fetch.call_count == 2
 
-    # Check that roll_back_version was called once with the version returned by gen_latest_version
+    # Check that roll_back_version was called once with the latest version
     mock_roll_back_version.assert_called_once_with(("April", 2024))
 
     # Check that the DataFrame returned by fetch_data is as expected
