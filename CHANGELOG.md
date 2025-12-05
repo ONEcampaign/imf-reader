@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.4.0 (2025-12-05)
+- The October 2025 release of WEO removed bulk downloads and moved everything towards the SDMX API. This update provides a way to parse new releases from the API instead of relying on the XML files. Note that thew new API response does not include observation-level notes or information on when projections start for each country-indicator.
+
 ## v1.3.0 (2025-2-05)
 - Made function available to fetch latest holdings and allocations date
 - Improved handling of unavailable dates

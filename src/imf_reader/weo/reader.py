@@ -1,16 +1,16 @@
 """Main interface to the WEO database."""
 
 from datetime import datetime
-from typing import Literal, Tuple, Optional
+from typing import Tuple, Optional
+
 import pandas as pd
 from functools import lru_cache
 
+from imf_reader.weo import Version
+from imf_reader.weo.api import get_weo_data, get_weo_versions
 from imf_reader.weo.scraper import SDMXScraper
 from imf_reader.weo.parser import SDMXParser
 from imf_reader.config import logger, NoDataError
-
-ValidMonths = Literal["April", "October"]  # Type hint for valid months
-Version = Tuple[ValidMonths, int]  # Type hint for version as a tuple of month and year
 
 
 def validate_version(version: Tuple) -> Version:
@@ -143,26 +143,29 @@ def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
     if version is not None:
         try:
             version = validate_version(version)
-            df = _fetch(version)
-            fetch_data.last_version_fetched = (
-                version  # store the version fetched as function attribute
-            )
-            return df
         except Exception as e:
             raise NoDataError(
                 f"Could not fetch data for version: {version[0]} {version[1]}. {str(e)}"
             )
+    else:
+        version = get_weo_versions()[0]
 
-    # if no version is passed, generate the latest version and fetch the data
-    latest_version = gen_latest_version()
     try:
-        return fetch_data(latest_version)
+        df = get_weo_data(version)
 
-    # if no data is found for the expected latest version, roll back once and try again
-    except NoDataError:
-        logger.info(
-            f"No data found for expected latest version: {latest_version[0]} {latest_version[1]}."
-            f" Rolling back version..."
-        )
-        latest_version = roll_back_version(latest_version)
-        return fetch_data(latest_version)
+    except (NoDataError, ValueError):
+        try:
+            df = _fetch(version)
+        except NoDataError:
+            logger.info(
+                f"No data found for expected latest version: {version[0]} {version[1]}."
+                f" Rolling back version..."
+            )
+            latest_version = roll_back_version(version)
+            return fetch_data(latest_version)
+
+    fetch_data.last_version_fetched = (
+        version  # store the version fetched as function attribute
+    )
+
+    return df

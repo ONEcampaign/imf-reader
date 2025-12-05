@@ -30,7 +30,6 @@ def input_df():
 
 
 class TestExchangeRateModule:
-
     @pytest.fixture(autouse=True)
     def auto_clear_cache(self):
         """Clear cache before each test."""
@@ -78,9 +77,10 @@ class TestExchangeRateModule:
 
     def test_get_exchange_rates_data_parse_error(self):
         """Test ValueError is raised when parsing fails."""
-        with patch("requests.post") as mock_post, patch(
-            "pandas.read_csv"
-        ) as mock_read_csv:
+        with (
+            patch("requests.post") as mock_post,
+            patch("pandas.read_csv") as mock_read_csv,
+        ):
             # Mock the response content with invalid data
             mock_response = MagicMock()
             mock_response.content = b"invalid data"

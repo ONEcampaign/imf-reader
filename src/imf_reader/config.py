@@ -31,3 +31,4 @@ fmt_shell = "%(levelname)s: %(message)s"
 shell_formatter = logging.Formatter(fmt_shell)  # Create formatters
 shell_handler.setFormatter(shell_formatter)  # Add formatters to handlers
 logger.addHandler(shell_handler)  # Add handlers to the logger
+logger.propagate = False  # Prevent duplicate logs when user configures root logger
