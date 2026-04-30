@@ -68,4 +68,4 @@ from imf_reader.sdr.read_announcements import (
     fetch_allocations_holdings as fetch_allocations_holdings,
     fetch_latest_allocations_holdings_date as fetch_latest_allocations_holdings_date,
 )
-from imf_reader.sdr.clear_cache import clear_cache as clear_cache
+from imf_reader.cache.legacy import _legacy_sdr_clear_cache as clear_cache  # noqa: F401

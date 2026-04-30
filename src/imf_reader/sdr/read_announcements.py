@@ -5,15 +5,16 @@ info: https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights
 
 """
 
-from functools import lru_cache
-import pandas as pd
 import calendar
-from bs4 import BeautifulSoup
-from datetime import datetime
 import logging
+from datetime import datetime, timedelta
 
-from imf_reader.utils import make_request
+import pandas as pd
+from bs4 import BeautifulSoup
+
+from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.config import logger
+from imf_reader.utils import make_request
 
 BASE_URL = "https://www.imf.org/external/np/fin/tad/"
 MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
@@ -54,7 +55,7 @@ def format_date(month: int, year: int) -> str:
     return f"{year}-{month}-{last_day}"
 
 
-@lru_cache
+@dataframe_cache(ttl=timedelta(days=7), sublayer="sdr")
 def get_holdings_and_allocations_data(
     year: int,
     month: int,
@@ -73,7 +74,7 @@ def get_holdings_and_allocations_data(
     return df
 
 
-@lru_cache
+@dataframe_cache(ttl=timedelta(days=1), sublayer="sdr")
 def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     """
     Get the latest available SDR allocation holdings date.

@@ -1,8 +1,9 @@
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import ANY, MagicMock, patch
+
+import pandas as pd
 import pytest
 import requests
-import pandas as pd
-from imf_reader import sdr
+
 from imf_reader.sdr.read_exchange_rate import (
     preprocess_data,
     fetch_exchange_rates,
@@ -31,9 +32,9 @@ def input_df():
 
 class TestExchangeRateModule:
     @pytest.fixture(autouse=True)
-    def auto_clear_cache(self):
-        """Clear cache before each test."""
-        sdr.clear_cache()
+    def auto_clear_cache(self, tmp_cache_root, cache_disabled):
+        """Isolate each test with a fresh cache root and bypass caching so
+        ``requests.post`` patches are intercepted by the call site."""
 
     @patch("requests.post")
     def test_get_exchange_rates_data_success(self, mock_post):

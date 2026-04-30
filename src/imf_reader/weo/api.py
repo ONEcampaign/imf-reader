@@ -1,15 +1,16 @@
 """IMF World Economic Outlook (WEO) API client."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
-from pathlib import Path
 
-import diskcache
 import pandas as pd
 import requests
 
 from imf_reader.config import logger
 from imf_reader.weo import ValidMonths, Version
+from imf_reader.cache.dataframe import dataframe_cache
+from imf_reader.cache.legacy import _legacy_weo_api_clear_cache as clear_cache  # noqa: F401
+from imf_reader.utils import make_get_request
 
 # Standard scale labels
 SCALE_LABELS = {
@@ -25,25 +26,22 @@ SCALE_MULTIPLIERS = {
     9: 1_000_000_000,
 }
 
-# Cache configuration
-_CACHE_DIR = Path.home() / ".cache" / "imf_reader" / "weo"
-_CACHE_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
-_cache = diskcache.Cache(str(_CACHE_DIR))
 
-
+@dataframe_cache(ttl=timedelta(hours=1), sublayer="weo_api")
 def _fetch_version_mapping() -> dict[Version, str]:
     """Fetch mapping of Version tuples to API version strings.
+
+    Results are cached for 1 hour to avoid redundant HTTP calls (F10).
 
     Returns:
         Dict mapping (month, year) tuples to API version strings.
         e.g. {("October", 2025): "9.0.0", ("April", 2025): "6.0.0"}
     """
     url = "https://api.imf.org/external/sdmx/3.0/structure/dataflow/IMF.RES/WEO/*?detail=full"
-    response = requests.get(url)
-    response.raise_for_status()
+    response = make_get_request(url)
 
     data = response.json()
-    mapping = {}
+    mapping: dict[Version, str] = {}
 
     for df in data.get("data", {}).get("dataflows", []):
         api_version = df["version"]
@@ -79,6 +77,7 @@ def get_weo_versions() -> list[Version]:
     return versions
 
 
+@dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")
 def _fetch_codelist(agency: str, codelist_id: str) -> dict[str, str]:
     """Fetch a codelist from the IMF API and return as a code->label mapping.
 
@@ -91,14 +90,8 @@ def _fetch_codelist(agency: str, codelist_id: str) -> dict[str, str]:
     Returns:
         Dict mapping codes to their labels.
     """
-    cache_key = f"codelist_{agency}_{codelist_id}"
-    if cache_key in _cache:
-        logger.debug(f"Cache hit for codelist: {agency}/{codelist_id}")
-        return _cache[cache_key]
-
     url = f"https://api.imf.org/external/sdmx/3.0/structure/codelist/{agency}/{codelist_id}"
-    response = requests.get(url)
-    response.raise_for_status()
+    response = make_get_request(url)
 
     data = response.json()
     codelists = data.get("data", {}).get("codelists", [])
@@ -107,12 +100,13 @@ def _fetch_codelist(agency: str, codelist_id: str) -> dict[str, str]:
 
     # Use the latest version
     cl = codelists[-1]
+    # F9 fix: filter out None keys so missing "id" fields don't pollute the cache.
     result = {
         code.get("id"): code.get("name", code.get("names", {}).get("en", ""))
         for code in cl.get("codes", [])
+        if code.get("id") is not None
     }
 
-    _cache.set(cache_key, result, expire=_CACHE_TTL)
     return result
 
 
@@ -215,6 +209,36 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df[output_columns]
 
 
+@dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")
+def _get_weo_data_cached(version: Version) -> pd.DataFrame:
+    """Inner cached fetch — keyed on a *resolved* (month, year) tuple.
+
+    Splitting the cache from the public ``get_weo_data`` ensures that
+    ``version=None`` is mapped to the current latest release before the cache
+    lookup. Otherwise the wrapper would cache under ``None`` for 7 days and
+    keep serving the previous release even after the version-mapping TTL
+    (1 hour) sees a new one.
+    """
+    mapping = _fetch_version_mapping()
+
+    if version not in mapping:
+        raise ValueError(
+            f"Version {version} not available. Available: {list(mapping.keys())}"
+        )
+
+    logger.info(f"Fetching WEO data from API: {version[0]} {version[1]}")
+    api_version = mapping[version]
+    url = f"https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/WEO/{api_version}/*"
+
+    # The data endpoint requires Accept: text/csv — make_get_request does not support
+    # custom headers, so we call requests.get directly for this one call site.
+    response = requests.get(url, headers={"Accept": "text/csv"})
+    response.raise_for_status()
+
+    df = pd.read_csv(StringIO(response.text), low_memory=False)
+    return _align_schema(df)
+
+
 def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data for a specific version.
 
@@ -226,45 +250,19 @@ def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     Returns:
         DataFrame with WEO data.
     """
-    mapping = _fetch_version_mapping()
-
     if version is None:
+        # Resolve to the concrete latest version BEFORE the cache lookup, so a
+        # new release picked up by the 1-hour version-mapping TTL takes effect
+        # immediately instead of being shadowed by a 7-day-TTL entry under None.
+        mapping = _fetch_version_mapping()
         versions = list(mapping.keys())
         versions.sort(key=lambda v: (v[1], 0 if v[0] == "April" else 1), reverse=True)
         version = versions[0]
 
-    if version not in mapping:
-        raise ValueError(
-            f"Version {version} not available. Available: {list(mapping.keys())}"
-        )
-
-    # Check cache first
-    cache_key = f"weo_data_{version[0]}_{version[1]}"
-    if cache_key in _cache:
-        logger.info(f"Cache hit for WEO data: {version[0]} {version[1]}")
-        return _cache[cache_key]
-
-    # Fetch from API
-    logger.info(f"Fetching WEO data from API: {version[0]} {version[1]}")
-    api_version = mapping[version]
-    url = f"https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/WEO/{api_version}/*"
-    headers = {"Accept": "text/csv"}
-
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-
-    df = pd.read_csv(StringIO(response.text), low_memory=False)
-    df = _align_schema(df)
-
-    # Cache the result with TTL
-    _cache.set(cache_key, df, expire=_CACHE_TTL)
-
-    return df
+    return _get_weo_data_cached(version)
 
 
-def clear_cache() -> None:
-    """Clear the local disk cache for WEO data.
-
-    This clears all cached WEO data and codelists, forcing fresh API calls.
-    """
-    _cache.clear()
+# Preserve the .cache_clear attribute on the public symbol so any caller that
+# relied on get_weo_data.cache_clear() (the dataframe_cache contract) keeps
+# working after the wrapper-vs-resolver split.
+get_weo_data.cache_clear = _get_weo_data_cached.cache_clear  # type: ignore[attr-defined]

@@ -62,13 +62,11 @@ print(weo.fetch_data.last_version_fetched)
 ```
 
 
-Caching is used to avoid multiple requests to the IMF website for the same data and to enhance performance. 
-Caching using the LRU (Least Recently Used) algorithm approach and stores data in RAM. The cache is cleared when the program is terminated.
-To clear the cache manually, use the `clear_cache` function.
+#### Caching
 
-```python
-weo.clear_cache()
-```
+Caching is used to avoid multiple requests to the IMF website for the same data and to enhance
+performance. See the [Caching](#caching) section below for full details on cache location,
+environment variable overrides, and how to clear or redirect the cache.
 
 
 For more advanced usage and tools for WEO data please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
@@ -123,12 +121,101 @@ By default, the exchange rate is in USDs per 1 SDR. To get the exchange rate in 
 sdr.fetch_exchange_rates("USD")
 ```
 
-To clear cached data use the `clear_cache` function.
+To clear cached SDR data, see the [Caching](#caching) section below.
 
-```python
-sdr.clear_cache()
+
+## Caching
+
+`imf-reader` caches data to disk to avoid redundant requests and to survive process restarts.
+
+### Cache location
+
+The cache is stored in the platform-appropriate user cache directory, segmented by package
+version so that upgrading the package starts with a clean cache automatically:
+
+- **Linux:** `~/.cache/imf_reader/<version>/` (e.g. `~/.cache/imf_reader/1.5.0/`)
+- **macOS:** `~/Library/Caches/imf_reader/<version>/`
+- **Windows:** `%LOCALAPPDATA%\imf_reader\<version>\`
+
+The version segment ensures that a package upgrade never silently serves data that was shaped
+by an older version of the code.
+
+### Overriding the cache directory
+
+Set the `IMF_READER_CACHE_DIR` environment variable before importing the package:
+
+```bash
+export IMF_READER_CACHE_DIR=/path/to/my/cache
 ```
 
+Or redirect programmatically at runtime:
+
+```python
+from imf_reader import cache
+
+cache.set_cache_dir("/path/to/my/cache")
+cache.get_cache_dir()       # inspect the current path
+cache.reset_cache_dir()     # restore to the default platformdirs path
+```
+
+### Clearing the cache
+
+The canonical way to clear all cached data:
+
+```python
+from imf_reader import cache
+
+cache.clear_cache()                  # clear everything
+cache.clear_cache(scope="weo")       # WEO data only
+cache.clear_cache(scope="sdr")       # SDR data only
+cache.clear_cache(scope="http")      # HTTP-layer cache only
+cache.clear_cache(scope="all")       # equivalent to no scope argument
+```
+
+A scoped clear only touches the named scope: `cache.clear_cache(scope="sdr")`
+removes SDR data and leaves the WEO and HTTP caches intact. The HTTP-layer
+clear additionally closes the active cached HTTP session so subsequent calls
+hit the network rather than reusing a dropped on-disk SQLite cache.
+
+The legacy module-level helpers still work but emit a `DeprecationWarning` pointing at
+`cache.clear_cache()`. They will be removed in v2.0:
+
+```python
+from imf_reader import weo, sdr
+
+weo.clear_cache()   # deprecated — use cache.clear_cache(scope="weo")
+sdr.clear_cache()   # deprecated — use cache.clear_cache(scope="sdr")
+```
+
+### Disabling the cache for development
+
+Disable the cache for the lifetime of the current process. While disabled,
+no payloads are written under the cache directory: bulk downloads land in a
+system temp file used only for the current call, and dataframe results are
+returned without being persisted.
+
+```python
+from imf_reader import cache
+
+cache.disable_cache()
+# ... work without caching ...
+cache.enable_cache()
+```
+
+### Corrupted bulk downloads
+
+If a WEO bulk SDMX download is corrupted, it is automatically evicted from the cache and a
+`cache.BulkPayloadCorruptError` is raised. Re-running the same call will trigger a fresh
+download:
+
+```python
+from imf_reader import cache
+
+try:
+    df = weo.fetch_data()
+except cache.BulkPayloadCorruptError:
+    df = weo.fetch_data()
+```
 
 ## Contributing
 

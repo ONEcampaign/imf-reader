@@ -16,6 +16,14 @@ class UnexpectedFileError(Exception):
     pass
 
 
+class BulkPayloadCorruptError(Exception):
+    """Raised when a cached or freshly-downloaded bulk payload (e.g., the WEO SDMX zip) fails
+    integrity validation. The corrupt cache entry is removed before this is raised, so the next
+    call re-downloads cleanly."""
+
+    pass
+
+
 # Configure Logging
 logger = logging.getLogger(__name__)
 shell_handler = logging.StreamHandler()  # Create terminal handler

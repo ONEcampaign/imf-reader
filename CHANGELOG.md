@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.5.0 (2026-04-29)
+- The cache now uses OS-appropriate directories, segmented by package version. On Linux the
+  default is `~/.cache/imf_reader/<version>/`; on macOS `~/Library/Caches/imf_reader/<version>/`;
+  on Windows `%LOCALAPPDATA%\imf_reader\<version>\`. The version segment means upgrading the
+  package automatically starts with a clean cache.
+- Users on Linux who want to reclaim disk space from the old hardcoded cache can run
+  `rm -rf ~/.cache/imf_reader/` after upgrading, or call `cache.set_cache_dir(...)` to keep
+  using the previous location.
+- A new environment variable `IMF_READER_CACHE_DIR` lets you override the cache location
+  without changing code — useful on shared infrastructure or in CI.
+- A new unified `imf_reader.cache` API replaces the scattered module-level helpers:
+  `clear_cache(scope=...)`, `set_cache_dir`, `reset_cache_dir`, `get_cache_dir`,
+  `enable_cache`, and `disable_cache`.
+- WEO bulk SDMX downloads are now cached on disk and survive process restarts. A corrupted
+  zip is detected automatically and evicted; retrying the same call re-downloads cleanly
+  (`cache.BulkPayloadCorruptError` is raised so callers can handle it explicitly).
+- SDR data (allocations and holdings, exchange rates, interest rates) now persists across
+  process restarts, matching the behaviour WEO users already had.
+- `weo.clear_cache()` and `sdr.clear_cache()` continue to work and emit a `DeprecationWarning`
+  pointing at `cache.clear_cache()`. They will be removed in v2.0.
+
 ## v1.4.1 (2025-12-05)
 - The new API implements a different scaling value behaviour. To preserve backwards compatibility, this new version 
 aligns with the old behaviour.
