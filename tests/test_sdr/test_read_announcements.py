@@ -1,8 +1,9 @@
-from unittest.mock import patch, Mock
-import pytest
-import pandas as pd
 import re
-from imf_reader import sdr
+from unittest.mock import Mock, patch
+
+import pandas as pd
+import pytest
+
 from imf_reader.sdr.read_announcements import (
     read_tsv,
     clean_df,
@@ -35,9 +36,8 @@ class TestReadAnnouncements:
     """Tests functions in the read_announcements module."""
 
     @pytest.fixture(autouse=True)
-    def auto_clear_cache(self):
-        """Clear cache before each test."""
-        sdr.clear_cache()
+    def auto_clear_cache(self, tmp_cache_root):
+        """Isolate each test with a fresh temporary cache root."""
 
     @patch("pandas.read_csv")
     def test_read_tsv_success(self, mock_read_csv):

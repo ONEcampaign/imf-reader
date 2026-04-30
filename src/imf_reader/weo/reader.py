@@ -1,19 +1,19 @@
 """Main interface to the WEO database."""
 
-from datetime import datetime
-from typing import Tuple, Optional
+from datetime import datetime, timedelta
 
 import pandas as pd
-from functools import lru_cache
 
 from imf_reader.weo import Version
 from imf_reader.weo.api import get_weo_data, get_weo_versions
 from imf_reader.weo.scraper import SDMXScraper
 from imf_reader.weo.parser import SDMXParser
 from imf_reader.config import logger, NoDataError
+from imf_reader.cache.dataframe import dataframe_cache
+from imf_reader.cache.legacy import _legacy_weo_clear_cache as clear_cache  # noqa: F401
 
 
-def validate_version(version: Tuple) -> Version:
+def validate_version(version: tuple) -> Version:
     """Validate the version
 
     Make sure that it is a tuple of month and year and the month is either April or October.
@@ -94,7 +94,7 @@ def roll_back_version(version: Version) -> Version:
         raise ValueError(f"Invalid version: {version}")
 
 
-@lru_cache
+@dataframe_cache(ttl=timedelta(days=7), sublayer="weo_sdmx_parsed")
 def _fetch(version: Version) -> pd.DataFrame:
     """Helper function which handles caching and fetching the data from the IMF website
 
@@ -111,14 +111,7 @@ def _fetch(version: Version) -> pd.DataFrame:
     return df
 
 
-def clear_cache():
-    """Clears the cache for any WEO data fetched by the `fetch_data` function."""
-
-    _fetch.cache_clear()
-    logger.info("Cache cleared")
-
-
-def fetch_data(version: Optional[Version] = None) -> pd.DataFrame:
+def fetch_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data
 
     By default, this function fetched data for the latest WEO publication. If a specific publication version

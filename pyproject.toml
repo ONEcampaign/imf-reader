@@ -1,6 +1,6 @@
 [project]
 name = "imf-reader"
-version = "1.4.1"
+version = "1.5.0"
 description = "A package to access imf data"
 authors = [{ name = "The ONE Campaign" }]
 license = { text = "MIT" }
@@ -11,13 +11,16 @@ dependencies = [
     "requests>=2.32.1",
     "chardet>=5.2.0",
     "beautifulsoup4>=4.12.3",
-    "diskcache>=5.6.0",
+    "filelock>=3.20",
+    "platformdirs>=4.5",
+    "pyarrow>=14.0",
+    "requests-cache>=1.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",
-    "black>=24.4.2",
+    "ruff>=0.6",
     "sphinx>=7.3.7",
     "myst-nb>=1.1.0",
     "autoapi>=2.0.1",

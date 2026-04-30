@@ -1,11 +1,13 @@
 """Module to read SDR interest and exchange rates from the IMF website"""
 
-import requests
-import pandas as pd
 import io
-from functools import lru_cache
+from datetime import timedelta
 
+import pandas as pd
+
+from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.config import logger
+from imf_reader.utils import make_post_request
 
 
 BASE_URL: str = "https://www.imf.org/external/np/fin/data/sdr_ir.aspx"
@@ -18,12 +20,7 @@ def get_interest_rates_data():
         "__EVENTTARGET": "lbnTSV",
     }
 
-    try:
-        response = requests.post(BASE_URL, data=data)
-        response.raise_for_status()
-
-    except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Could not connect to {BASE_URL}. Error: {str(e)}")
+    response = make_post_request(BASE_URL, data=data)
 
     try:
         return pd.read_csv(
@@ -31,7 +28,7 @@ def get_interest_rates_data():
         )
 
     except pd.errors.ParserError as e:
-        raise ValueError(f"Could not parse data. Error: {str(e)}")
+        raise ValueError(f"Could not parse data. Error: {e}") from e
 
 
 def preprocess_data(df: pd.DataFrame):
@@ -103,7 +100,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-@lru_cache
+@dataframe_cache(ttl=timedelta(days=7), sublayer="sdr")
 def fetch_interest_rates() -> pd.DataFrame:
     """Fetch the historic SDR interest rates from the IMF
 
