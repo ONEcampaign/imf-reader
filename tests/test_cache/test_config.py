@@ -23,26 +23,31 @@ def _reset_config():
     cfg._cache_enabled = True
 
 
-def test_default_root_uses_platformdirs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_root_uses_platformdirs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """get_active_root() uses platformdirs when no override or env var is set."""
     monkeypatch.delenv(cfg.ENV_VAR, raising=False)
-    fake_base = "/fake/cache/dir"
+    fake_base = str(tmp_path / "fake_cache")
 
     with patch("platformdirs.user_cache_dir", return_value=fake_base) as mock_pdir:
         root = cfg.get_active_root()
 
     mock_pdir.assert_called_once_with("imf_reader", appauthor=False)
-    assert str(root).startswith(fake_base)
+    # Compare via Path semantics so the test is portable across separator conventions.
+    assert root.is_relative_to(Path(fake_base))
 
 
-def test_env_var_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_var_overrides_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """IMF_READER_CACHE_DIR env var overrides the platformdirs default."""
-    env_path = "/tmp/imf_cache_env"
+    env_path = str(tmp_path / "env_cache")
     monkeypatch.setenv(cfg.ENV_VAR, env_path)
 
     root = cfg.get_active_root()
 
-    assert str(root).startswith(env_path)
+    assert root.is_relative_to(Path(env_path))
 
 
 def test_version_segment_in_path(monkeypatch: pytest.MonkeyPatch) -> None:

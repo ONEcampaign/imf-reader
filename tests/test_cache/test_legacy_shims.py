@@ -61,7 +61,9 @@ def test_weo_clear_cache_no_warning_at_import() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        from imf_reader.weo import clear_cache  # noqa: F401 — import itself is under test
+        from imf_reader.weo import (
+            clear_cache,  # noqa: F401 — import itself is under test
+        )
 
 
 def test_weo_clear_cache_signature() -> None:

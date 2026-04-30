@@ -41,6 +41,12 @@ def dataframe_cache(
         # Capture signature once at decoration time (P2 — avoids per-call overhead).
         sig = inspect.signature(fn)
 
+        # Sanitize fn.__qualname__ for use in filenames: nested-defined functions
+        # produce names like "outer.<locals>.fetch" which contain "<" and ">",
+        # both illegal on Windows (NTFS reserved characters → ENOTSUP/EINVAL on
+        # write). Stripping them keeps cache keys portable across platforms.
+        safe_qualname = fn.__qualname__.replace("<", "_").replace(">", "_")
+
         def _get_sublayer_dir() -> Path:
             # Always re-resolve so set_cache_dir() takes effect even if the
             # listener registry has been cleared by a test fixture or other
@@ -53,7 +59,7 @@ def dataframe_cache(
             key_repr = repr(sorted(bound.arguments.items()))
             digest = hashlib.sha256(key_repr.encode()).hexdigest()[:16]
             module = fn.__module__ or ""
-            return f"{module}.{fn.__qualname__}__{digest}"
+            return f"{module}.{safe_qualname}__{digest}"
 
         def _cache_path(key: str, result: Any) -> Path:
             ext = ".parquet" if isinstance(result, pd.DataFrame) else ".pkl"
@@ -91,7 +97,7 @@ def dataframe_cache(
             if not d.exists():
                 return
             module = fn.__module__ or ""
-            prefix = f"{module}.{fn.__qualname__}__"
+            prefix = f"{module}.{safe_qualname}__"
             for p in d.iterdir():
                 if p.name.startswith(prefix):
                     p.unlink(missing_ok=True)

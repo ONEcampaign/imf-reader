@@ -9,7 +9,9 @@ import requests
 from imf_reader.config import logger
 from imf_reader.weo import ValidMonths, Version
 from imf_reader.cache.dataframe import dataframe_cache
-from imf_reader.cache.legacy import _legacy_weo_api_clear_cache as clear_cache  # noqa: F401
+from imf_reader.cache.legacy import (
+    _legacy_weo_api_clear_cache as clear_cache,  # noqa: F401
+)
 from imf_reader.utils import make_get_request
 
 # Standard scale labels

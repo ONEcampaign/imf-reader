@@ -20,7 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",
-    "black>=24.4.2",
+    "ruff>=0.6",
     "sphinx>=7.3.7",
     "myst-nb>=1.1.0",
     "autoapi>=2.0.1",
