@@ -176,7 +176,11 @@ class TestExchangeRateModule:
 
         # Assertions
         pd.testing.assert_frame_equal(result, expected_df)
-        assert result.date.dtype == "datetime64[ns]"
+        # Resolution-agnostic check — pandas 3 defaults to datetime64[us] for
+        # pd.to_datetime, pandas 2 used [ns]. We only care that the column is a
+        # datetime dtype; the specific resolution is already enforced through
+        # assert_frame_equal against the expected frame.
+        assert pd.api.types.is_datetime64_any_dtype(result.date)
         assert result.exchange_rate.dtype == "float64"
 
     def test_parse_data_invalid_unit_basis(self, input_df):
