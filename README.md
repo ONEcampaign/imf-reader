@@ -1,5 +1,7 @@
-[![PyPI](https://img.shields.io/pypi/v/imf-reader.svg)](https://pypi.org/project/imf-reader/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/imf_reader.svg)](https://pypi.org/project/imf_reader/)
+[![PyPI version](https://img.shields.io/pypi/v/imf-reader?label=PyPI%20-%20version)](https://pypi.org/project/imf-reader/)
+[![Anaconda version](https://img.shields.io/conda/vn/conda-forge/imf-reader?label=conda%20-%20version)](https://anaconda.org/channels/conda-forge/packages/imf-reader)
+![PyPI monthly downloads](https://img.shields.io/pypi/dm/imf-reader?label=PyPI%20downloads)
+![Anaconda monthly downloads](https://img.shields.io/conda/dn/conda-forge/imf-reader?label=conda%20downloads)
 [![Documentation Status](https://readthedocs.org/projects/imf-reader/badge/?version=latest)](https://imf-reader.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/ONEcampaign/imf-reader/branch/main/graph/badge.svg?token=YN8S1719NH)](https://codecov.io/gh/ONEcampaign/imf-reader)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -21,8 +23,16 @@ or releases corrupted data files or unexpected data formats. Please report any i
 
 ## Installation
 
+With `pip`:
+
 ```bash
 $ pip install imf-reader
+```
+
+With `conda`:
+
+```bash
+$ conda install imf-reader
 ```
 
 ## Usage
