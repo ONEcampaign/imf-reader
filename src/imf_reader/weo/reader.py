@@ -119,7 +119,7 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
     >>> fetch_data(("April", 2024)) # fetches the data for April 2024
 
     Args:
-        version: The version of the WEO data to fetch as a tuple eg `("April", 2023).
+        version: The version of the WEO data to fetch as a tuple eg `("April", 2023)`.
                  By default, the latest version is fetched.
 
     Returns:
