@@ -8,6 +8,7 @@ from imf_reader.weo import Version
 from imf_reader.weo.api import get_weo_data, get_weo_versions
 from imf_reader.weo.scraper import SDMXScraper
 from imf_reader.weo.parser import SDMXParser
+from imf_reader.weo.translate import to_api_vocabulary
 from imf_reader.config import logger, NoDataError
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import _legacy_weo_clear_cache as clear_cache  # noqa: F401
@@ -30,12 +31,10 @@ def validate_version(version: tuple) -> Version:
             "Invalid version. Must be a tuple of month ('April' or 'October') and year"
         )
 
-    # check that the month is either April or October
     month = version[0].strip().capitalize()
     if month not in ["April", "October"]:
         raise TypeError("Invalid month. Must be `April` or `October`")
 
-    # check that the year is an integer. If it is not try to make it an integer
     year = version[1]
     if not isinstance(year, int):
         try:
@@ -56,24 +55,18 @@ def gen_latest_version() -> Version:
     current_year = datetime.now().year
     current_month = datetime.now().month
 
-    # if month is less than 4 (April) return the version 2 (October) for the previous year
     if current_month < 4:
         return "October", current_year - 1
-
-    # elif month is less than 10 (October) return current year and version 2 (April)
     elif current_month < 10:
         return "April", current_year
-
-    # else (if month is more than 10 (October) return current month and version 2 (October)
     else:
         return "October", current_year
 
 
 def roll_back_version(version: Version) -> Version:
-    """Roll back version to the previous version
+    """Roll back version to the expected previous version.
 
-    This function rolls back the version passed to the expected previous version. If the version is April 2024
-    it will roll back to October 2023. If the version is October 2023 it will roll back to April 2023.
+    e.g. April 2024 rolls back to October 2023, and October 2023 rolls back to April 2023.
 
     Args:
         version: The version to roll back
@@ -96,17 +89,18 @@ def roll_back_version(version: Version) -> Version:
 
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_sdmx_parsed")
 def _fetch(version: Version) -> pd.DataFrame:
-    """Helper function which handles caching and fetching the data from the IMF website
+    """Scrape, parse, and translate WEO SDMX data for one version, with disk-backed caching.
 
     Args:
         version: The version of the WEO data to fetch
 
     Returns:
-        A pandas DataFrame containing the WEO data
+        A pandas DataFrame containing the WEO data, in the api.imf.org vocabulary
     """
 
-    folder = SDMXScraper.scrape(*version)  # scrape the data and get the SDMX files
-    df = SDMXParser.parse(folder)  # parse the SDMX files into a DataFrame
+    folder = SDMXScraper.scrape(*version)
+    df = SDMXParser.parse(folder)
+    df = to_api_vocabulary(df)
     logger.info(f"Data fetched successfully for version: {version[0]} {version[1]}")
     return df
 
@@ -114,7 +108,7 @@ def _fetch(version: Version) -> pd.DataFrame:
 def fetch_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data
 
-    By default, this function fetched data for the latest WEO publication. If a specific publication version
+    By default, this function fetches data for the latest WEO publication. If a specific publication version
     is required, the version can be passed as a tuple of month and year. WEO data is released in April and October
     each year. For the version month, the month must be either "April" or "October"
     This function caches the data for faster access and to prevent multiple requests to the IMF website. To clear the
@@ -132,7 +126,6 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
         A pandas DataFrame containing the WEO data
     """
 
-    # if version is passed, validate it and fetch the data
     if version is not None:
         try:
             version = validate_version(version)
@@ -157,8 +150,6 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
             latest_version = roll_back_version(version)
             return fetch_data(latest_version)
 
-    fetch_data.last_version_fetched = (
-        version  # store the version fetched as function attribute
-    )
+    fetch_data.last_version_fetched = version
 
     return df

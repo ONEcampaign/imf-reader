@@ -1,12 +1,12 @@
 """Tests for weo scraper module."""
 
 import io
+import os
 from unittest.mock import Mock, patch
-from zipfile import BadZipFile, ZipFile
+from zipfile import ZipFile
 
 import pytest
 import requests
-from bs4 import BeautifulSoup
 from readerkit import RedirectPolicyError
 
 import imf_reader.cache.config as cfg
@@ -35,85 +35,136 @@ def isolated_cache(tmp_path):
     cfg.reset_objects()
 
 
-def test_get_soup(cache_disabled):
-    """Test get_soup with a mocked make_request response."""
+class TestSdmxUrlResolution:
+    """Tests for _sdmx_url_candidates and _resolve_sdmx_url. All offline."""
 
-    with patch("imf_reader.weo.scraper.make_request") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.content = b"<html></html>"
+    def test_candidates_month_segment_first_from_2024(self):
+        """2024 is where the IMF switched to the month-segment path shape."""
+        candidates = scraper._sdmx_url_candidates("April", 2024)
+        assert len(candidates) == 3
+        assert candidates[0].endswith("/2024/april/weoapr2024-sdmxdata.zip")
 
-        # Call the function with the mock object
-        soup = scraper.get_soup("April", 2021)
+    def test_candidates_bare_first_before_2024(self):
+        candidates = scraper._sdmx_url_candidates("October", 2023)
+        assert len(candidates) == 3
+        assert candidates[0].endswith("/2023/weooct2023-sdmxdata.zip")
 
-        # Assert the result
-        assert isinstance(soup, BeautifulSoup)
-        assert str(soup) == "<html></html>"
+    def test_candidates_known_good_urls(self):
+        """Pinned as literals so a refactor cannot silently change them."""
+        assert scraper._sdmx_url_candidates("April", 2025) == [
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2025/april/weoapr2025-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2025/weoapr2025-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2025/01/weoapr2025-sdmxdata.zip",
+        ]
+        assert scraper._sdmx_url_candidates("October", 2023) == [
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2023/weooct2023-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2023/october/weooct2023-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2023/02/weooct2023-sdmxdata.zip",
+        ]
+        assert scraper._sdmx_url_candidates("October", 2020) == [
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2020/weooct2020-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2020/october/weooct2020-sdmxdata.zip",
+            "https://www.imf.org/-/media/files/publications/weo/weo-database"
+            "/2020/02/weooct2020-sdmxdata.zip",
+        ]
 
+    def test_invalid_month_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unsupported month"):
+            scraper._sdmx_url_candidates("March", 2024)
 
-class TestSDMXScraper:
-    """Test SDMXScraper class."""
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_returns_first_candidate_hit(self, mock_get_session):
+        session = Mock()
+        session.get.return_value = Mock(status_code=200)
+        mock_get_session.return_value = session
 
-    def test_get_sdmx_url(self):
-        """Test get_sdmx_url"""
+        url = scraper._resolve_sdmx_url("April", 2025)
 
-        # set up mock
-        mock_soup = Mock(spec=BeautifulSoup)
-        mock_soup.find.return_value.get.return_value = "test/url"
+        assert url == scraper._sdmx_url_candidates("April", 2025)[0]
+        assert session.get.call_count == 1
 
-        # test expected behavior
-        result = scraper.SDMXScraper.get_sdmx_url(mock_soup)
-        assert result == "test/url"
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_falls_through_404s_to_later_candidate(self, mock_get_session):
+        """October 2020: the first two forms 404, the release-number form succeeds."""
+        session = Mock()
+        session.get.side_effect = [
+            Mock(status_code=404),
+            Mock(status_code=404),
+            Mock(status_code=206),
+        ]
+        mock_get_session.return_value = session
 
-        # Test when href is None
-        mock_soup.find.return_value.get.return_value = None
-        with pytest.raises(NoDataError, match="SDMX data not found"):
-            scraper.SDMXScraper.get_sdmx_url(mock_soup)
+        url = scraper._resolve_sdmx_url("October", 2020)
 
-        # test AttributeError
-        mock_soup.find.return_value.get.side_effect = AttributeError
-        with pytest.raises(NoDataError, match="SDMX data not found"):
-            scraper.SDMXScraper.get_sdmx_url(mock_soup)
+        assert url == scraper._sdmx_url_candidates("October", 2020)[2]
+        assert session.get.call_count == 3
 
-    @patch("imf_reader.weo.scraper.make_request")
-    def test_get_sdmx_folder(self, mock_request):
-        """Test get_sdmx_folder"""
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_all_404_raises_no_data_error(self, mock_get_session):
+        session = Mock()
+        session.get.return_value = Mock(status_code=404)
+        mock_get_session.return_value = session
 
-        # set up mock
-        zip_content = io.BytesIO()
-        with ZipFile(zip_content, "w") as zipf:
-            zipf.writestr("test.txt", "test content")
-        mock_request.return_value.content = zip_content.getvalue()
+        with pytest.raises(NoDataError) as exc_info:
+            scraper._resolve_sdmx_url("October", 2025)
 
-        # Test expected behavior
-        folder = scraper.SDMXScraper.get_sdmx_folder(TEST_URL)
-        assert isinstance(folder, ZipFile)  # The result is a ZipFile object
-        assert folder.testzip() is None  # No exception is raised
+        message = str(exc_info.value)
+        assert "October" in message
+        assert "2025" in message
+        for candidate in scraper._sdmx_url_candidates("October", 2025):
+            assert candidate in message
 
-        # Test BadZipFile
-        bad_zip_content = io.BytesIO(b"this is not a valid zip file")
-        mock_request.return_value.content = bad_zip_content.getvalue()
-        with pytest.raises(BadZipFile):
-            scraper.SDMXScraper.get_sdmx_folder(TEST_URL)
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_probes_with_ranged_get_not_head(self, mock_get_session):
+        """HEAD is served by Akamai and 403s on this host; a ranged GET is served
+        by Cloudflare and works. A refactor to HEAD would reintroduce the block."""
+        session = Mock()
+        session.get.return_value = Mock(status_code=200)
+        mock_get_session.return_value = session
 
-    @patch("imf_reader.weo.scraper.make_request")
-    @patch.object(ZipFile, "testzip")
-    def test_get_sdmx_folder_corrupt_zip(self, mock_testzip, mock_request):
-        """Test get_sdmx_folder with a corrupt zip file"""
+        scraper._resolve_sdmx_url("April", 2025)
 
-        # Create a valid zip file
-        valid_zip_content = io.BytesIO()
-        with ZipFile(valid_zip_content, "w") as zipf:
-            zipf.writestr("test.txt", "This is some test content")
+        session.head.assert_not_called()
+        _args, kwargs = session.get.call_args
+        assert kwargs["headers"] == {"Range": "bytes=0-0"}
+        assert kwargs["stream"] is True
 
-        # Set up the mock to return the valid zip file
-        mock_request.return_value.content = valid_zip_content.getvalue()
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_403_raises_instead_of_trying_next_candidate(
+        self, mock_get_session
+    ):
+        """A 403 (e.g. bot management) is not "not found" -- it must fail loudly
+        rather than fall through to the next candidate, which could paper over a
+        media-path block by resolving to a stale or wrong release."""
+        response = Mock(status_code=403)
+        response.raise_for_status.side_effect = requests.HTTPError("403 Client Error")
+        session = Mock()
+        session.get.return_value = response
+        mock_get_session.return_value = session
 
-        # Mock testzip to always return a non-None value
-        mock_testzip.return_value = lambda: "test.txt"
+        with pytest.raises(requests.HTTPError):
+            scraper._resolve_sdmx_url("April", 2025)
 
-        # Test that a BadZipFile exception is raised
-        with pytest.raises(BadZipFile, match="Corrupt zip file"):
-            scraper.SDMXScraper.get_sdmx_folder(TEST_URL)
+        assert session.get.call_count == 1
+
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_resolve_propagates_transport_error(self, mock_get_session):
+        """A genuine transport failure must surface to the caller, not be
+        swallowed as 'not found'."""
+        session = Mock()
+        session.get.side_effect = requests.ConnectionError("connection refused")
+        mock_get_session.return_value = session
+
+        with pytest.raises(requests.ConnectionError):
+            scraper._resolve_sdmx_url("April", 2025)
 
 
 def _fake_bulk_fetcher_writing(payload: bytes):
@@ -136,45 +187,36 @@ class TestSDMXScraperCacheIntegration:
     """Integration tests for SDMXScraper.scrape with the artifact-cache layer."""
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
-    def test_scrape_cache_hit_skips_http(self, mock_request, mock_bulk_fetcher):
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
+    def test_scrape_cache_hit_skips_http(self, mock_get_sdmx_url, mock_bulk_fetcher):
         """Second scrape() call must not hit the network when a valid cache entry exists."""
         zip_bytes = _make_zip_bytes("sdmx.xml", "<data/>")
-
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
         mock_bulk_fetcher.side_effect = _fake_bulk_fetcher_writing(zip_bytes)
 
-        # The first call misses the cache, scraping the page and downloading content.
+        # The first call misses the cache, resolving the URL and downloading content.
         result1 = scraper.SDMXScraper.scrape("April", 2024)
         assert isinstance(result1, ZipFile)
-        assert mock_request.call_count == 1
+        assert mock_get_sdmx_url.call_count == 1
         assert mock_bulk_fetcher.call_count == 1
 
         # Reset call counts. The second call should be a cache hit, so the fetcher
-        # (and therefore the page scrape it wraps) must not run at all.
-        mock_request.reset_mock()
+        # (and therefore the URL resolution it wraps) must not run at all.
+        mock_get_sdmx_url.reset_mock()
         mock_bulk_fetcher.reset_mock()
 
         result2 = scraper.SDMXScraper.scrape("April", 2024)
         assert isinstance(result2, ZipFile)
-        mock_request.assert_not_called()
+        mock_get_sdmx_url.assert_not_called()
         mock_bulk_fetcher.assert_not_called()
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
     def test_scrape_corrupt_zip_raises_BulkPayloadCorruptError(
-        self, mock_request, mock_bulk_fetcher
+        self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """A non-zip payload must raise BulkPayloadCorruptError and leave no cache entry."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
         mock_bulk_fetcher.side_effect = _fake_bulk_fetcher_writing(
             b"this is definitely not a zip file"
         )
@@ -193,17 +235,13 @@ class TestSDMXScraperCacheIntegration:
         assert leftovers == [], f"corrupt payload left behind: {leftovers}"
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
     def test_scrape_transport_failure_raises_connection_error(
-        self, mock_request, mock_bulk_fetcher
+        self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """A readerkit transport failure during the download reaches the caller as
         ConnectionError, like every other network failure in the package."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
 
         def _bulk_fetcher(url, *, session):
             def _fail(ctx):
@@ -224,18 +262,14 @@ class TestSDMXScraperCacheIntegration:
             scraper.SDMXScraper.scrape("April", 2024)
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
     def test_scrape_requests_connection_error_raises_connection_error(
-        self, mock_request, mock_bulk_fetcher
+        self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """A requests.ConnectionError exhausted by the fetcher's own retries reaches
         the caller as builtin ConnectionError, like every other network failure in
         the package."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
 
         def _bulk_fetcher(url, *, session):
             def _fail(ctx):
@@ -251,17 +285,13 @@ class TestSDMXScraperCacheIntegration:
             scraper.SDMXScraper.scrape("April", 2024)
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
     def test_scrape_http_error_raises_connection_error(
-        self, mock_request, mock_bulk_fetcher
+        self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """An HTTPError from raise_for_status() (not retried by the fetcher) reaches
         the caller as builtin ConnectionError."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
 
         def _bulk_fetcher(url, *, session):
             def _fail(ctx):
@@ -277,18 +307,14 @@ class TestSDMXScraperCacheIntegration:
             scraper.SDMXScraper.scrape("April", 2024)
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
     def test_scrape_read_timeout_raises_connection_error(
-        self, mock_request, mock_bulk_fetcher
+        self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """A ReadTimeout reaches the caller as builtin ConnectionError. The fetcher
         retries neither it nor any other Timeout except ConnectTimeout, so it escapes
         on the first attempt."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
 
         def _bulk_fetcher(url, *, session):
             def _fail(ctx):
@@ -303,18 +329,32 @@ class TestSDMXScraperCacheIntegration:
         ):
             scraper.SDMXScraper.scrape("April", 2024)
 
-    @patch("imf_reader.weo.scraper.bulk_fetcher")
-    @patch("imf_reader.weo.scraper.make_request")
-    def test_scrape_no_data_error_propagates_untranslated(
-        self, mock_request, mock_bulk_fetcher
+    @patch("imf_reader.weo.scraper.get_uncached_session")
+    def test_scrape_403_reaches_caller_as_connection_error_not_no_data_error(
+        self, mock_get_session
     ):
-        """NoDataError raised by the fetcher (e.g. from get_sdmx_url) must not be
+        """A 403 on every candidate must surface as ConnectionError, the same as
+        any other network failure -- not as NoDataError, which reader.fetch_data
+        would catch and silently roll back to a different release for."""
+        response = Mock(status_code=403)
+        response.raise_for_status.side_effect = requests.HTTPError("403 Client Error")
+        session = Mock()
+        session.get.return_value = response
+        mock_get_session.return_value = session
+
+        with pytest.raises(ConnectionError) as exc_info:
+            scraper.SDMXScraper.scrape("April", 2024)
+
+        assert not isinstance(exc_info.value, NoDataError)
+
+    @patch("imf_reader.weo.scraper.bulk_fetcher")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
+    def test_scrape_no_data_error_propagates_untranslated(
+        self, mock_get_sdmx_url, mock_bulk_fetcher
+    ):
+        """NoDataError raised by the fetcher (e.g. from URL resolution) must not be
         caught or translated by the network-failure handler."""
-        html_response = Mock()
-        html_response.content = (
-            b'<html><body><a href="/sdmx_url">SDMX Data</a></body></html>'
-        )
-        mock_request.return_value = html_response
+        mock_get_sdmx_url.return_value = TEST_URL
 
         def _bulk_fetcher(url, *, session):
             def _fail(ctx):
@@ -326,3 +366,65 @@ class TestSDMXScraperCacheIntegration:
 
         with pytest.raises(NoDataError, match="SDMX data not found"):
             scraper.SDMXScraper.scrape("April", 2024)
+
+
+class TestKnownCorruptReleaseMessage:
+    """The corrupt-zip error is enriched, and marked non-retryable, only for the
+    two releases known to be corrupt at the IMF's own source."""
+
+    @patch("imf_reader.weo.scraper.bulk_fetcher")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
+    def test_known_corrupt_release_message_is_enriched(
+        self, mock_get_sdmx_url, mock_bulk_fetcher
+    ):
+        mock_get_sdmx_url.return_value = TEST_URL
+        mock_bulk_fetcher.side_effect = _fake_bulk_fetcher_writing(
+            b"this is definitely not a zip file"
+        )
+
+        with pytest.raises(BulkPayloadCorruptError) as exc_info:
+            scraper.SDMXScraper.scrape("October", 2023)
+
+        message = str(exc_info.value)
+        assert "IMF's own published archive" in message
+        assert "not a bug in imf-reader" in message
+        assert exc_info.value.is_retryable is False
+
+    @patch("imf_reader.weo.scraper.bulk_fetcher")
+    @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
+    def test_healthy_release_message_is_not_enriched(
+        self, mock_get_sdmx_url, mock_bulk_fetcher
+    ):
+        """A corrupt payload for a release that isn't on the known-corrupt list
+        gets the plain message and stays retryable — the archive could just be
+        having a bad day."""
+        mock_get_sdmx_url.return_value = TEST_URL
+        mock_bulk_fetcher.side_effect = _fake_bulk_fetcher_writing(
+            b"this is definitely not a zip file"
+        )
+
+        with pytest.raises(BulkPayloadCorruptError) as exc_info:
+            scraper.SDMXScraper.scrape("April", 2024)
+
+        message = str(exc_info.value)
+        assert "IMF's own published archive" not in message
+        assert exc_info.value.is_retryable is True
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.environ.get("IMF_READER_LIVE_TESTS") != "1",
+    reason="hits the real IMF CDN; set IMF_READER_LIVE_TESTS=1 to run",
+)
+@pytest.mark.parametrize(
+    ("month", "year"),
+    [("April", 2025), ("October", 2023), ("October", 2020)],
+)
+def test_resolve_sdmx_url_live(month, year):
+    """Resolves a known-good release against the real CDN.
+
+    Only checks that a URL resolves, not that the zip is valid: April 2021 and
+    October 2023's zips are corrupt at the IMF's source, not in transit.
+    """
+    url = scraper._resolve_sdmx_url(month, year)
+    assert url.startswith(scraper.MEDIA_BASE)
