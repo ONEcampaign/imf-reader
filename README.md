@@ -187,7 +187,7 @@ The cache is stored in the platform-appropriate user cache directory, under a `r
 shared with other packages built on the same caching library, and segmented by package version
 so that upgrading the package starts with a clean cache automatically:
 
-- **Linux:** `~/.cache/readerkit/v1/imf-reader/<version>/` (e.g. `~/.cache/readerkit/v1/imf-reader/1.6.0/`)
+- **Linux:** `~/.cache/readerkit/v1/imf-reader/<version>/` (e.g. `~/.cache/readerkit/v1/imf-reader/2.0.0/`)
 - **macOS:** `~/Library/Caches/readerkit/v1/imf-reader/<version>/`
 - **Windows:** `%LOCALAPPDATA%\readerkit\Cache\v1\imf-reader\<version>\`
 

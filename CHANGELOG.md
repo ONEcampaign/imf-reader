@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.0 (2026-08-11)
+## v2.0.0 (2026-08-12)
 
 - `weo.get_weo_versions()` now reports every WEO release this package can fetch — the API's
   dataflow mapping plus the discontinued bulk SDMX archive (April 2019 through April 2025) —
