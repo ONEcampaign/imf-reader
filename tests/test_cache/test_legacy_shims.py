@@ -20,13 +20,11 @@ import imf_reader.cache.config as cfg
 @pytest.fixture(autouse=True)
 def _reset_config(tmp_path: Path) -> None:
     cfg._programmatic_override = tmp_path
-    cfg._listeners.clear()
-    cfg._clear_listeners.clear()
+    cfg.reset_objects()
     cfg._cache_enabled = True
     yield
     cfg._programmatic_override = None
-    cfg._listeners.clear()
-    cfg._clear_listeners.clear()
+    cfg.reset_objects()
     cfg._cache_enabled = True
 
 

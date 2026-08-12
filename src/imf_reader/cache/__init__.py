@@ -17,13 +17,15 @@ Usage::
 """
 
 import shutil
+from pathlib import Path
 from typing import Literal
 
+from readerkit import ArtifactCache
+
 from imf_reader.config import BulkPayloadCorruptError as BulkPayloadCorruptError
-from imf_reader.config import logger
 from imf_reader.cache.config import (
-    _clear_listeners,
     _set_enabled,
+    close_session as _close_session,
     get_active_root,
     get_bulk_cache_dir as get_bulk_cache_dir,
     get_dataframe_cache_dir as get_dataframe_cache_dir,
@@ -32,14 +34,34 @@ from imf_reader.cache.config import (
     set_cache_dir as set_cache_dir,
 )
 
-# Expose get_cache_dir as the public name (I3 — mirrors oda_reader._cache.config).
+# Expose get_cache_dir as the public name, mirroring oda_reader._cache.config.
 get_cache_dir = get_active_root
 
+# The bulk artifact-cache namespaces reachable from each scope. Cleared through
+# ArtifactCache.clear() rather than rmtree, since it takes each entry's own lock
+# and so can't half-delete a concurrent process's in-flight download.
+_SCOPE_TO_BULK_NAMESPACES: dict[str, tuple[str, ...]] = {
+    "weo": ("weo_sdmx",),
+}
+
+# The plain cache-root subdirectories reachable from each scope. These have no
+# readerkit object to delegate to, so they stay a directory rmtree.
 _SCOPE_TO_SUBLAYERS: dict[str, tuple[str, ...]] = {
-    "weo": ("weo_sdmx", "weo_sdmx_parsed", "weo_api"),
+    "weo": ("weo_sdmx_parsed", "weo_api"),
     "sdr": ("sdr",),
     "http": ("http",),
 }
+
+
+def _clear_bulk_namespace(root: Path, namespace: str) -> None:
+    """Empty one bulk artifact-cache namespace under *root*.
+
+    Built against the root directly rather than through the memoised factory: while caching is
+    disabled that factory hands back a bypass instance whose clear() touches no disk at all,
+    which would leave the payloads a later enable_cache() re-serves. Clearing is maintenance on
+    the cache root, so it must work whatever the enabled flag says.
+    """
+    ArtifactCache(cache_dir=root, namespace=namespace).clear()
 
 
 def clear_cache(scope: Literal["all", "weo", "sdr", "http"] = "all") -> None:
@@ -49,50 +71,39 @@ def clear_cache(scope: Literal["all", "weo", "sdr", "http"] = "all") -> None:
         scope: Which sublayers to remove.
 
             - ``"all"`` (default) — remove every immediate subdir of the cache root.
-              Uses a filesystem walk so future sublayers are automatically included
-              (avoids the F1 failure mode of silently leaking newly-added sublayers).
+              Uses a filesystem walk so future sublayers are automatically included,
+              rather than a hardcoded list that would silently miss a sublayer added later.
             - ``"weo"`` — remove ``weo_sdmx``, ``weo_sdmx_parsed``, and ``weo_api``.
             - ``"sdr"`` — remove the ``sdr`` sublayer.
             - ``"http"`` — remove the ``http`` sublayer.
     """
     root = get_active_root()
-    target_sublayers: set[str] | None = (
-        None if scope == "all" else set(_SCOPE_TO_SUBLAYERS[scope])
-    )
 
     # Close the HTTP session before rmtree-ing its SQLite file: on Windows the
     # open file would block deletion, and on Unix a stale connection can keep
-    # serving rows from the deleted DB until the process exits.
-    if target_sublayers is None or "http" in target_sublayers:
-        from imf_reader.cache import http as _http
+    # serving rows from the deleted DB until the process exits. Only the session
+    # is closed. An artifact cache running in bypass mode owns a temp directory
+    # whose paths the caller may still be holding.
+    if scope in ("all", "http"):
+        _close_session()
 
-        _http._on_http_clear()
-
-    if root.exists():
-        if scope == "all":
-            # Walk every immediate subdir — no hardcoded list (I5 / decision 17).
+    if scope == "all":
+        if root.exists():
+            # Walk every immediate subdir rather than a hardcoded list, so a sublayer added
+            # later is cleared too. This removes artifacts/ and http/ themselves, not just
+            # their contents.
             for child in root.iterdir():
                 if child.is_dir():
                     shutil.rmtree(child, ignore_errors=True)
-        else:
-            for sublayer in _SCOPE_TO_SUBLAYERS[scope]:
-                path = root / sublayer
-                if path.exists():
-                    shutil.rmtree(path, ignore_errors=True)
+        return
 
-    # Fire listeners (even when disk was empty) so in-memory state is reset —
-    # but only for sublayers in scope, so a scope='sdr' clear can't wipe weo_api.
-    _fire_clear_listeners(target_sublayers)
+    for namespace in _SCOPE_TO_BULK_NAMESPACES.get(scope, ()):
+        _clear_bulk_namespace(root, namespace)
 
-
-def _fire_clear_listeners(target_sublayers: set[str] | None) -> None:
-    for sublayer, cb in list(_clear_listeners):
-        if target_sublayers is not None and sublayer not in target_sublayers:
-            continue
-        try:
-            cb()
-        except Exception as exc:
-            logger.warning("clear-listener %r raised: %s", cb, exc)
+    for sublayer in _SCOPE_TO_SUBLAYERS[scope]:
+        path = root / sublayer
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def enable_cache() -> None:
@@ -108,7 +119,7 @@ def disable_cache() -> None:
 
     All decorated functions bypass both the read and write cache paths and call
     through to the underlying function directly.  Has no effect on already-cached
-    data on disk.
+    data on disk, and no effect if caching is already disabled.
     """
     _set_enabled(False)
 

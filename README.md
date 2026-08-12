@@ -6,18 +6,17 @@
 [![codecov](https://codecov.io/gh/ONEcampaign/imf-reader/branch/main/graph/badge.svg?token=YN8S1719NH)](https://codecov.io/gh/ONEcampaign/imf-reader)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-
 # imf-reader
 
-A package to access IMF data. 
+A package to access IMF data.
 
 This package supports access to IMF data with no/limited accessibility through the API,
 including the World Economic Outlook (WEO) database and Special Drawing Rights (SDR) data
 
-__NOTE__:
+**NOTE**:
 
-This package is designed to scrape data from the IMF website. 
-The IMF does not provide an official API for accessing WEO data yet. As a result, 
+This package is designed to scrape data from the IMF website.
+The IMF does not provide an official API for accessing WEO data yet. As a result,
 the tools in this package are subject to breakage if the IMF changes the structure of their website,
 or releases corrupted data files or unexpected data formats. Please report any issues you encounter.
 
@@ -55,14 +54,14 @@ print(df)
 
 By default, the function will return the WEO data for the latest year available.
 You can specify a version by passing the month and year of the version you want to retrieve.
-NOTE: The WEO reports are released in April and October of each year. The month of the version must 
+NOTE: The WEO reports are released in April and October of each year. The month of the version must
 be either "April" or "October".
 
 ```python
 df = weo.fetch_data(version=("April", 2020))
 ```
 
-If the version of the data fetched is needed, it can be 
+If the version of the data fetched is needed, it can be
 retrieved from the function attribute `last_version_fetched`.
 
 ```python
@@ -71,16 +70,13 @@ print(weo.fetch_data.last_version_fetched)
 # >>> ('April', 2024) or whichever version was just fetched
 ```
 
-
 #### Caching
 
 Caching is used to avoid multiple requests to the IMF website for the same data and to enhance
 performance. See the [Caching](#caching) section below for full details on cache location,
 environment variable overrides, and how to clear or redirect the cache.
 
-
 For more advanced usage and tools for WEO data please use the [weo-reader package](https://github.com/epogrebnyak/weo-reader).
-
 
 ### 2. Special Drawing Rights (SDR) data
 
@@ -88,7 +84,6 @@ The SDR is an international reserve asset created by the IMF in 1969.
 It is not a currency, but the holder of SDRs can exchange them for usable currencies in times of need.
 
 Read more about SDRs at: https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr
-
 
 Import the module
 
@@ -101,6 +96,7 @@ Read allocations and holdings data.
 ```python
 sdr.fetch_allocations_holdings()
 ```
+
 SDRs holdings and allocations are published at a monthly frequency. The function fetches the latest data available by
 default. Check the latest available date
 
@@ -125,6 +121,7 @@ Read exchange rates. This function gets the historical exchange rates for SDRs u
 ```python
 sdr.fetch_exchange_rates()
 ```
+
 By default, the exchange rate is in USDs per 1 SDR. To get the exchange rate in SDRs per 1 USD, pass the unit basis as "USD"
 
 ```python
@@ -133,22 +130,19 @@ sdr.fetch_exchange_rates("USD")
 
 To clear cached SDR data, see the [Caching](#caching) section below.
 
-
 ## Caching
 
 `imf-reader` caches data to disk to avoid redundant requests and to survive process restarts.
 
 ### Cache location
 
-The cache is stored in the platform-appropriate user cache directory, segmented by package
-version so that upgrading the package starts with a clean cache automatically:
+The cache is stored in the platform-appropriate user cache directory, under a `readerkit` root
+shared with other packages built on the same caching library, and segmented by package version
+so that upgrading the package starts with a clean cache automatically:
 
-- **Linux:** `~/.cache/imf_reader/<version>/` (e.g. `~/.cache/imf_reader/1.5.0/`)
-- **macOS:** `~/Library/Caches/imf_reader/<version>/`
-- **Windows:** `%LOCALAPPDATA%\imf_reader\<version>\`
-
-The version segment ensures that a package upgrade never silently serves data that was shaped
-by an older version of the code.
+- **Linux:** `~/.cache/readerkit/v1/imf-reader/<version>/` (e.g. `~/.cache/readerkit/v1/imf-reader/1.6.0/`)
+- **macOS:** `~/Library/Caches/readerkit/v1/imf-reader/<version>/`
+- **Windows:** `%LOCALAPPDATA%\readerkit\Cache\v1\imf-reader\<version>\`
 
 ### Overriding the cache directory
 
@@ -156,6 +150,14 @@ Set the `IMF_READER_CACHE_DIR` environment variable before importing the package
 
 ```bash
 export IMF_READER_CACHE_DIR=/path/to/my/cache
+```
+
+If `IMF_READER_CACHE_DIR` is not set, `BBLOCKS_CACHE_DIR` is used instead. It is a family-wide
+fallback shared with other bblocks packages, useful for pointing several packages at one shared
+cache root:
+
+```bash
+export BBLOCKS_CACHE_DIR=/path/to/shared/cache
 ```
 
 Or redirect programmatically at runtime:
@@ -182,10 +184,9 @@ cache.clear_cache(scope="http")      # HTTP-layer cache only
 cache.clear_cache(scope="all")       # equivalent to no scope argument
 ```
 
-A scoped clear only touches the named scope: `cache.clear_cache(scope="sdr")`
+A scoped clear only touches the named scope. `cache.clear_cache(scope="sdr")`
 removes SDR data and leaves the WEO and HTTP caches intact. The HTTP-layer
-clear additionally closes the active cached HTTP session so subsequent calls
-hit the network rather than reusing a dropped on-disk SQLite cache.
+clear additionally closes the active cached HTTP session.
 
 The legacy module-level helpers still work but emit a `DeprecationWarning` pointing at
 `cache.clear_cache()`. They will be removed in v2.0:
@@ -199,10 +200,9 @@ sdr.clear_cache()   # deprecated — use cache.clear_cache(scope="sdr")
 
 ### Disabling the cache for development
 
-Disable the cache for the lifetime of the current process. While disabled,
-no payloads are written under the cache directory: bulk downloads land in a
-system temp file used only for the current call, and dataframe results are
-returned without being persisted.
+Disable the cache for the lifetime of the current process. While disabled, bulk
+downloads land in a system temp file used only for the current call, and
+dataframe results return without being persisted.
 
 ```python
 from imf_reader import cache
@@ -211,6 +211,14 @@ cache.disable_cache()
 # ... work without caching ...
 cache.enable_cache()
 ```
+
+### Network requests
+
+HTTP requests carry a default connect/read timeout and retry with backoff on transient failures
+and server errors.
+
+If the cache directory sits on an NFS mount, set `READERKIT_LOCK_STRATEGY=strict-soft` to switch
+from native file locking to marker-file locking, which NFS supports more reliably.
 
 ### Corrupted bulk downloads
 

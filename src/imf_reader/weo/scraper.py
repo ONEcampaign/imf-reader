@@ -2,27 +2,18 @@
 
 import io
 from datetime import timedelta
+from pathlib import Path
 from zipfile import BadZipFile, ZipFile, is_zipfile
 
+import requests
 from bs4 import BeautifulSoup
+from readerkit import ArtifactCorruptError, FetchContext, TransportError, bulk_fetcher
 
+from imf_reader.cache.config import get_artifact_cache, get_uncached_session
 from imf_reader.config import BulkPayloadCorruptError, NoDataError, logger
 from imf_reader.utils import make_request
 
 BASE_URL = "https://www.imf.org/"
-
-# Lazy singleton — created on first use so no I/O at import time.
-_zip_cache = None
-
-
-def _get_zip_cache():
-    """Return the module-level CacheManager, creating it on first access."""
-    global _zip_cache
-    if _zip_cache is None:
-        from imf_reader.cache.manager import CacheManager
-
-        _zip_cache = CacheManager(sublayer="weo_sdmx", ttl=timedelta(days=7), keep_n=4)
-    return _zip_cache
 
 
 def get_soup(month: str, year: str | int) -> BeautifulSoup:
@@ -95,10 +86,11 @@ class SDMXScraper:
     def scrape(month: str, year: str | int) -> ZipFile:
         """Pipeline to scrape SDMX files, with disk-backed caching.
 
-        The first call for a given ``(month, year)`` downloads the ~30 MB SDMX
-        zip from the IMF website, validates it, and stores it atomically on disk.
-        Subsequent calls within the TTL window (7 days) return the cached copy
-        without any HTTP requests.
+        The first call for a given ``(month, year)`` downloads the SDMX zip from
+        the IMF website, validates it, and stores it atomically on disk. The zip
+        is a few MB and holds an XML payload around ten times that size. Subsequent
+        calls within the TTL window (7 days) return the cached copy without any
+        HTTP requests.
 
         Args:
             month: The month of the data to download. Can be April or October.
@@ -108,31 +100,45 @@ class SDMXScraper:
             The zip file object containing the SDMX data files.
 
         Raises:
-            BulkPayloadCorruptError: If the downloaded (or cached) zip fails
-                integrity validation.
+            BulkPayloadCorruptError: If the downloaded zip fails integrity validation.
+            ConnectionError: On any other network failure while downloading the zip.
         """
         key = f"weo_{str(month).lower()}_{int(year)}.zip"
 
-        def _fetch_bytes() -> bytes:
+        def _fetch(ctx: FetchContext) -> None:
+            # The SDMX URL isn't known until the HTML page is scraped, so that
+            # scrape happens inside the fetcher: a cache hit skips it entirely.
             soup = get_soup(month, year)
             sdmx_url = SDMXScraper.get_sdmx_url(soup)
-            # Bypass the requests-cache layer: this payload is validated and
-            # cached by CacheManager. Letting requests-cache also store it would
-            # mean that a corrupt 200 response (truncated/non-zip) gets retained
-            # for 1 day, so the next retry would read the same corrupt body
-            # instead of re-downloading.
-            response = make_request(sdmx_url, use_http_cache=False)
-            return response.content
+            bulk_fetcher(sdmx_url, session=get_uncached_session())(ctx)
 
-        def _validate(content: bytes) -> None:
-            if not is_zipfile(io.BytesIO(content)):
+        def _validate(path: Path) -> None:
+            if not is_zipfile(path):
                 raise BulkPayloadCorruptError(f"Not a zip file for {month} {year}")
-            with ZipFile(io.BytesIO(content)) as zf:
+            with ZipFile(path) as zf:
                 bad = zf.testzip()
                 if bad is not None:
                     raise BulkPayloadCorruptError(
                         f"Corrupt zip for {month} {year}: bad entry {bad!r}"
                     )
 
-        path = _get_zip_cache().get_or_fetch(key, _fetch_bytes, validator=_validate)
+        try:
+            path = get_artifact_cache("weo_sdmx").ensure(
+                key,
+                fetcher=_fetch,
+                ttl=timedelta(days=7),
+                validator=_validate,
+                suffix=".zip",
+            )
+        except ArtifactCorruptError as exc:
+            raise BulkPayloadCorruptError(
+                str(exc), key=exc.key, reason=exc.reason
+            ) from exc
+        except (TransportError, requests.RequestException) as exc:
+            # Covers an exhausted requests.ConnectionError, an HTTPError from
+            # raise_for_status(), and a Timeout, none of which the fetcher retries.
+            # Every other network failure in the package reaches callers as ConnectionError.
+            raise ConnectionError(
+                f"Could not download the WEO SDMX data for {month} {year}. Error: {exc}"
+            ) from exc
         return ZipFile(str(path))
