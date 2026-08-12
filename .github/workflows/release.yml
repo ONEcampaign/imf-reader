@@ -10,6 +10,14 @@ jobs:
   release:
     name: Release package to PyPI
     runs-on: ubuntu-latest
+    # Matches the environment named in the PyPI trusted publisher for this
+    # project. The names must agree or PyPI rejects the OIDC claim.
+    environment: pypi
+    permissions:
+      # Declaring any permission drops the rest to none, so checkout needs
+      # contents spelled out alongside the OIDC token the publish step mints.
+      contents: read
+      id-token: write
 
     steps:
       - name: Check-out repository
@@ -28,10 +36,8 @@ jobs:
         run: uv build
 
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip_existing: true
-          verify_metadata: true
+          skip-existing: true
+          verify-metadata: true
           verbose: true
