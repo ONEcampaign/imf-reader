@@ -23,6 +23,11 @@ extensions = [
 ]
 autoapi_dirs = ["../src"]
 
+# Generate anchor slugs for Markdown headings up to h4, so in-page links like
+# [Caching](#caching) in README.md resolve. Without this, myst_nb assigns no
+# anchors at all and every such link reports as an unresolved cross-reference.
+myst_heading_anchors = 4
+
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.

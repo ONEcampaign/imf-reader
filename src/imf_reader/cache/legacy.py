@@ -9,15 +9,15 @@ import warnings
 
 _MSGS = {
     "weo": (
-        "imf_reader.weo.clear_cache is deprecated and will be removed in 2.0. "
+        "imf_reader.weo.clear_cache is deprecated and will be removed in 3.0. "
         "Use imf_reader.cache.clear_cache() instead."
     ),
     "weo_api": (
-        "imf_reader.weo.api.clear_cache is deprecated and will be removed in 2.0. "
+        "imf_reader.weo.api.clear_cache is deprecated and will be removed in 3.0. "
         "Use imf_reader.cache.clear_cache() instead."
     ),
     "sdr": (
-        "imf_reader.sdr.clear_cache is deprecated and will be removed in 2.0. "
+        "imf_reader.sdr.clear_cache is deprecated and will be removed in 3.0. "
         "Use imf_reader.cache.clear_cache() instead."
     ),
 }

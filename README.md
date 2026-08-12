@@ -4,7 +4,7 @@
 ![Anaconda monthly downloads](https://img.shields.io/conda/dn/conda-forge/imf-reader?label=conda%20downloads)
 [![Documentation Status](https://readthedocs.org/projects/imf-reader/badge/?version=latest)](https://imf-reader.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/ONEcampaign/imf-reader/branch/main/graph/badge.svg?token=YN8S1719NH)](https://codecov.io/gh/ONEcampaign/imf-reader)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 # imf-reader
 
@@ -15,10 +15,12 @@ including the World Economic Outlook (WEO) database and Special Drawing Rights (
 
 **NOTE**:
 
-This package is designed to scrape data from the IMF website.
-The IMF does not provide an official API for accessing WEO data yet. As a result,
-the tools in this package are subject to breakage if the IMF changes the structure of their website,
-or releases corrupted data files or unexpected data formats. Please report any issues you encounter.
+WEO data comes from the IMF's official SDMX API for releases from April 2025 onward, and from the
+discontinued bulk SDMX archive for the releases before it (see Coverage and known issues below).
+SDR data is read by parsing pages on the IMF website, which publishes no API for it. As a result,
+the tools in this package are subject to breakage if the IMF changes the structure of their
+website, or releases corrupted data files or unexpected data formats. Please report any issues
+you encounter.
 
 ## Installation
 
@@ -117,7 +119,7 @@ them; fetching one directly raises `cache.BulkPayloadCorruptError` with
 `NOTES` and `LASTACTUALDATE` are only populated for releases before October 2025 —
 the API does not expose observation-level notes or last-actual-date.
 
-#### Caching
+#### Cache behaviour
 
 Caching is used to avoid multiple requests to the IMF website for the same data and to enhance
 performance. See the [Caching](#caching) section below for full details on cache location,
@@ -187,7 +189,7 @@ The cache is stored in the platform-appropriate user cache directory, under a `r
 shared with other packages built on the same caching library, and segmented by package version
 so that upgrading the package starts with a clean cache automatically:
 
-- **Linux:** `~/.cache/readerkit/v1/imf-reader/<version>/` (e.g. `~/.cache/readerkit/v1/imf-reader/1.6.0/`)
+- **Linux:** `~/.cache/readerkit/v1/imf-reader/<version>/` (e.g. `~/.cache/readerkit/v1/imf-reader/2.0.0/`)
 - **macOS:** `~/Library/Caches/readerkit/v1/imf-reader/<version>/`
 - **Windows:** `%LOCALAPPDATA%\readerkit\Cache\v1\imf-reader\<version>\`
 
@@ -236,7 +238,7 @@ removes SDR data and leaves the WEO and HTTP caches intact. The HTTP-layer
 clear additionally closes the active cached HTTP session.
 
 The legacy module-level helpers still work but emit a `DeprecationWarning` pointing at
-`cache.clear_cache()`. They will be removed in v2.0:
+`cache.clear_cache()`. They will be removed in v3.0:
 
 ```python
 from imf_reader import weo, sdr
@@ -284,9 +286,9 @@ except cache.BulkPayloadCorruptError:
 
 ## Contributing
 
-This package relies on webscraping techniques to access data from the source. It is likely
-that the functionality of this package will break if the IMF changes the structure of their website
-or their data files. If you encounter any issues, please report them.
+The tools in this package are subject to breakage if the IMF changes the structure of their
+website or their data files (see the note on data sources above). If you encounter any issues,
+please report them.
 
 Interested in contributing? Check out the contributing guidelines. Please note that this project is released with a Code of Conduct. By contributing to this project, you agree to abide by its terms.
 

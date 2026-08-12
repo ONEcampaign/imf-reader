@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.0 (2026-08-11)
+## v2.0.0 (2026-08-12)
 
 - `weo.get_weo_versions()` now reports every WEO release this package can fetch — the API's
   dataflow mapping plus the discontinued bulk SDMX archive (April 2019 through April 2025) —
@@ -55,6 +55,9 @@
 - A failed fetch can now raise `ArtifactWriteError`, `CacheLockTimeout`, `CacheLockUnavailable`,
   `TruncatedDownloadError`, `SessionForkError`, `CacheDirectoryError`, or `RedirectPolicyError`
   from the underlying caching library, in addition to the exceptions `imf-reader` already raised.
+- `weo.clear_cache()`, `weo.api.clear_cache()`, and `sdr.clear_cache()` survive this release. v1.5.0
+  announced their removal in 2.0; they still work and still emit a `DeprecationWarning`, and the
+  removal moves to 3.0 alongside `REF_AREA_IMF_CODE`.
 - The public `imf_reader.cache` API is otherwise unchanged.
 
 ## v1.5.0 (2026-04-29)
