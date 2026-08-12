@@ -1,5 +1,6 @@
 """Tests for the dataframe_cache decorator (cache/dataframe.py)."""
 
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -134,6 +135,32 @@ def test_ttl_expiry_forces_refetch(tmp_path: Path) -> None:
     fetch_fresh(x=99)
 
     assert len(calls) == 2, "Zero TTL should force a call on every invocation"
+
+
+def test_future_mtime_does_not_extend_ttl() -> None:
+    """An entry stamped ahead of the clock is aged at zero, not treated as fresh.
+
+    Windows stamps a written file from a finer clock than the one
+    ``datetime.now()`` reads, so a freshly written entry can sit a few
+    milliseconds in the future. Left unclamped that reads as a negative age,
+    which is less than every ttl and makes a zero-ttl entry look fresh. This
+    forces the skew rather than waiting for the platform to produce it.
+    """
+    calls: list[int] = []
+
+    @dataframe_cache(ttl=timedelta(seconds=0), sublayer="test_skew")
+    def fetch_skewed(x: int = 1) -> pd.DataFrame:
+        calls.append(x)
+        return pd.DataFrame({"v": [x]})
+
+    fetch_skewed(x=1)
+    entry = next((cfg.get_active_root() / "test_skew").iterdir())
+    ahead = entry.stat().st_mtime + 60
+    os.utime(entry, (ahead, ahead))
+
+    fetch_skewed(x=1)
+
+    assert len(calls) == 2
 
 
 def test_disable_cache_bypasses_disk() -> None:

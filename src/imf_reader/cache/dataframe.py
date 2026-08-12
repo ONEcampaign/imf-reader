@@ -67,7 +67,13 @@ def dataframe_cache(
 
         def _is_fresh(path: Path) -> bool:
             mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-            return datetime.now(tz=timezone.utc) - mtime < ttl
+            # Windows' system clock is coarser (~16ms) than the timestamp NTFS
+            # stamps on a write, so a file written moments ago can carry an
+            # mtime a few milliseconds ahead of datetime.now(). Clamping keeps
+            # that skew from producing a negative age, which compares as less
+            # than every ttl and would make a zero-ttl entry look fresh.
+            age = max(datetime.now(tz=timezone.utc) - mtime, timedelta(0))
+            return age < ttl
 
         def _read(path: Path) -> Any:
             if path.suffix == ".parquet":
