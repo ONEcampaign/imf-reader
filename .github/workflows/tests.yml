@@ -5,9 +5,9 @@ name: tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -19,10 +19,9 @@ jobs:
       matrix:
         config:
           - { os: ubuntu-latest, py: "3.12" }
-          - { os: ubuntu-latest, py: "3.11" }
-          - { os: windows-latest, py: "3.10" }
-          - { os: macOS-latest, py: "3.10" }
-          - { os: ubuntu-latest, py: "3.10" }
+          - { os: ubuntu-latest, py: "3.13" }
+          - { os: windows-latest, py: "3.12" }
+          - { os: macOS-latest, py: "3.12" }
 
     steps:
       - uses: actions/checkout@v4

@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from io import StringIO
 
 import pandas as pd
-import requests
 
 from imf_reader.config import logger
 from imf_reader.weo import ValidMonths, Version
@@ -33,7 +32,7 @@ SCALE_MULTIPLIERS = {
 def _fetch_version_mapping() -> dict[Version, str]:
     """Fetch mapping of Version tuples to API version strings.
 
-    Results are cached for 1 hour to avoid redundant HTTP calls (F10).
+    Results are cached for 1 hour to avoid redundant HTTP calls.
 
     Returns:
         Dict mapping (month, year) tuples to API version strings.
@@ -102,7 +101,7 @@ def _fetch_codelist(agency: str, codelist_id: str) -> dict[str, str]:
 
     # Use the latest version
     cl = codelists[-1]
-    # F9 fix: filter out None keys so missing "id" fields don't pollute the cache.
+    # Filter out None keys so missing "id" fields don't pollute the cache.
     result = {
         code.get("id"): code.get("name", code.get("names", {}).get("en", ""))
         for code in cl.get("codes", [])
@@ -232,10 +231,11 @@ def _get_weo_data_cached(version: Version) -> pd.DataFrame:
     api_version = mapping[version]
     url = f"https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/WEO/{api_version}/*"
 
-    # The data endpoint requires Accept: text/csv — make_get_request does not support
-    # custom headers, so we call requests.get directly for this one call site.
-    response = requests.get(url, headers={"Accept": "text/csv"})
-    response.raise_for_status()
+    # use_http_cache=False: this CSV already sits under a 7-day parquet cache
+    # (the @dataframe_cache above), so a second copy in the HTTP cache is waste.
+    response = make_get_request(
+        url, headers={"Accept": "text/csv"}, use_http_cache=False
+    )
 
     df = pd.read_csv(StringIO(response.text), low_memory=False)
     return _align_schema(df)
@@ -244,7 +244,8 @@ def _get_weo_data_cached(version: Version) -> pd.DataFrame:
 def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data for a specific version.
 
-    Data is cached locally to avoid repeated API calls. Use `clear_cache()` to clear.
+    Data is cached locally to avoid repeated API calls. Use
+    ``imf_reader.cache.clear_cache(scope="weo")`` to clear it.
 
     Args:
         version: Version tuple (month, year) e.g. ("April", 2025). If None, uses latest.

@@ -19,9 +19,25 @@ class UnexpectedFileError(Exception):
 class BulkPayloadCorruptError(Exception):
     """Raised when a cached or freshly-downloaded bulk payload (e.g., the WEO SDMX zip) fails
     integrity validation. The corrupt cache entry is removed before this is raised, so the next
-    call re-downloads cleanly."""
+    call re-downloads cleanly.
 
-    pass
+    ``key`` and ``reason`` are optional so existing single-message call sites keep working;
+    readerkit's ``ArtifactCorruptError`` supplies both when this is raised from a translated
+    cache failure.
+    """
+
+    is_retryable: bool = True
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        key: str | None = None,
+        reason: str | None = None,
+    ) -> None:
+        self.key = key
+        self.reason = reason
+        super().__init__(message)
 
 
 # Configure Logging

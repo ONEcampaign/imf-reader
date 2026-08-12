@@ -2,7 +2,6 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
-import requests
 
 from imf_reader.sdr.read_exchange_rate import (
     preprocess_data,
@@ -34,9 +33,9 @@ class TestExchangeRateModule:
     @pytest.fixture(autouse=True)
     def auto_clear_cache(self, tmp_cache_root, cache_disabled):
         """Isolate each test with a fresh cache root and bypass caching so
-        ``requests.post`` patches are intercepted by the call site."""
+        ``make_post_request`` patches are intercepted by the call site."""
 
-    @patch("requests.post")
+    @patch("imf_reader.sdr.read_exchange_rate.make_post_request")
     def test_get_exchange_rates_data_success(self, mock_post):
         """Test successful data retrieval and parsing"""
         # Mock the response content with a valid TSV format
@@ -57,11 +56,13 @@ class TestExchangeRateModule:
         mock_post.assert_called_once_with(BASE_URL, data={"__EVENTTARGET": "lbnTSV"})
 
     def test_get_exchange_rates_data_connection_error(self):
-        """Test ConnectionError is raised when requests.post fails."""
-        with patch("requests.post") as mock_post:
-            # Simulate raising a requests.exceptions.RequestException
-            mock_post.side_effect = requests.exceptions.RequestException(
-                "Network error"
+        """Test ConnectionError is raised when the POST request fails."""
+        with patch("imf_reader.sdr.read_exchange_rate.make_post_request") as mock_post:
+            # make_post_request itself translates a transport failure into
+            # ConnectionError (see utils.py), so the mock raises what its
+            # caller actually sees.
+            mock_post.side_effect = ConnectionError(
+                f"Could not connect to {BASE_URL}. Error: Network error"
             )
 
             # Verify the exception
@@ -79,7 +80,7 @@ class TestExchangeRateModule:
     def test_get_exchange_rates_data_parse_error(self):
         """Test ValueError is raised when parsing fails."""
         with (
-            patch("requests.post") as mock_post,
+            patch("imf_reader.sdr.read_exchange_rate.make_post_request") as mock_post,
             patch("pandas.read_csv") as mock_read_csv,
         ):
             # Mock the response content with invalid data

@@ -1,20 +1,17 @@
 [project]
 name = "imf-reader"
-version = "1.5.0"
+version = "1.6.0"
 description = "A package to access imf data"
 authors = [{ name = "The ONE Campaign" }]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "pandas>=2.2.2",
     "requests>=2.32.1",
-    "chardet>=5.2.0",
     "beautifulsoup4>=4.12.3",
-    "filelock>=3.20",
-    "platformdirs>=4.5",
     "pyarrow>=14.0",
-    "requests-cache>=1.2",
+    "readerkit>=0.1.0,<0.2",
 ]
 
 [project.optional-dependencies]

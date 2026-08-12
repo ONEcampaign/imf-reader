@@ -118,7 +118,7 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
     is required, the version can be passed as a tuple of month and year. WEO data is released in April and October
     each year. For the version month, the month must be either "April" or "October"
     This function caches the data for faster access and to prevent multiple requests to the IMF website. To clear the
-    cache, use the `clear_cache` function.
+    cache, use ``imf_reader.cache.clear_cache(scope="weo")``.
 
     e.g.
     >>> fetch_data() # fetches the latest data

@@ -7,8 +7,6 @@ assignment on the wrapper (e.g. fetch_data.last_version_fetched = ...).
 """
 
 import functools
-import hashlib
-import inspect
 import logging
 import pickle
 from datetime import datetime, timedelta, timezone
@@ -16,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from readerkit import cache_key_for_call
 
 from imf_reader.cache import config as _cfg
 
@@ -38,9 +37,6 @@ def dataframe_cache(
     """
 
     def decorator(fn: Any) -> Any:
-        # Capture signature once at decoration time (P2 — avoids per-call overhead).
-        sig = inspect.signature(fn)
-
         # Sanitize fn.__qualname__ for use in filenames: nested-defined functions
         # produce names like "outer.<locals>.fetch" which contain "<" and ">",
         # both illegal on Windows (NTFS reserved characters → ENOTSUP/EINVAL on
@@ -48,18 +44,14 @@ def dataframe_cache(
         safe_qualname = fn.__qualname__.replace("<", "_").replace(">", "_")
 
         def _get_sublayer_dir() -> Path:
-            # Always re-resolve so set_cache_dir() takes effect even if the
-            # listener registry has been cleared by a test fixture or other
-            # caller. The cost is one Path concat per call — negligible.
+            # Always re-resolve so set_cache_dir() takes effect immediately, even
+            # between calls. The cost is one Path concat per call, which is negligible.
             return _cfg.get_active_root() / sublayer
 
         def _make_cache_key(*args: Any, **kwargs: Any) -> str:
-            bound = sig.bind(*args, **kwargs)
-            bound.apply_defaults()
-            key_repr = repr(sorted(bound.arguments.items()))
-            digest = hashlib.sha256(key_repr.encode()).hexdigest()[:16]
+            key = cache_key_for_call(fn, *args, **kwargs)
             module = fn.__module__ or ""
-            return f"{module}.{safe_qualname}__{digest}"
+            return f"{module}.{safe_qualname}__{key}"
 
         def _cache_path(key: str, result: Any) -> Path:
             ext = ".parquet" if isinstance(result, pd.DataFrame) else ".pkl"
@@ -102,11 +94,6 @@ def dataframe_cache(
                 if p.name.startswith(prefix):
                     p.unlink(missing_ok=True)
 
-        # Register the clear-callback so umbrella clear_cache() nukes in-memory state.
-        # Tagged with our sublayer so a scoped clear (e.g. scope='sdr') cannot reach
-        # into another sublayer's files.
-        _cfg.register_clear_listener(_do_cache_clear, sublayer=sublayer)
-
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not _cfg.is_cache_enabled():
@@ -126,7 +113,8 @@ def dataframe_cache(
                 logger.warning("Failed to write cache entry %s: %s", path, exc)
             return result
 
-        # Attach cache_clear so sdr/clear_cache.py and user code keep working (F6 + decision 1).
+        # Attach cache_clear so sdr/clear_cache.py and user code can clear this
+        # function's entries without reaching into module internals.
         wrapper.cache_clear = _do_cache_clear  # type: ignore[attr-defined]
 
         return wrapper

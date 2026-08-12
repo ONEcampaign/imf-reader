@@ -15,13 +15,11 @@ from imf_reader.cache.dataframe import dataframe_cache
 def _reset_config(tmp_path: Path) -> None:
     """Isolate every test: fresh cache root + reset config state."""
     cfg._programmatic_override = tmp_path
-    cfg._listeners.clear()
-    cfg._clear_listeners.clear()
+    cfg.reset_objects()
     cfg._cache_enabled = True
     yield
     cfg._programmatic_override = None
-    cfg._listeners.clear()
-    cfg._clear_listeners.clear()
+    cfg.reset_objects()
     cfg._cache_enabled = True
 
 
@@ -46,6 +44,14 @@ def _make_tuple_fn(call_tracker: list[int]) -> object:
         return (year, month)
 
     return fetch_tuple
+
+
+# Defined at module scope, unlike the helpers above, so its __qualname__ has no
+# "<locals>" segment to sanitize. The prefix test below needs the raw
+# fn.__qualname__ to already be filesystem-safe.
+@dataframe_cache(ttl=timedelta(days=7), sublayer="test_prefix")
+def _fetch_for_prefix_test(x: int = 1) -> pd.DataFrame:
+    return pd.DataFrame({"v": [x]})
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +110,7 @@ def test_cache_clear_attribute_exists_and_works() -> None:
 
 
 def test_attribute_write_persists() -> None:
-    """Attribute assignments on the wrapper function object persist (F14 contract)."""
+    """Attribute assignments on the wrapper function object persist."""
     calls: list[int] = []
     fn = _make_df_fn(calls)
 
@@ -145,6 +151,25 @@ def test_disable_cache_bypasses_disk() -> None:
     assert len(calls) == 2, (
         "Both calls should reach the function when cache is disabled"
     )
+
+
+def test_cache_filename_prefix_matches_clear_scan() -> None:
+    """The on-disk filename starts with the prefix cache_clear() scans for.
+
+    cache_clear() finds entries to delete by matching a filename prefix built
+    from the function's module and qualname, independently of how the writer
+    builds that same prefix. Pinning the two together here means a change to
+    either side that breaks the match shows up as a test failure instead of
+    files that silently outlive a cache_clear() call.
+    """
+    _fetch_for_prefix_test(x=123)
+
+    cache_dir = cfg.get_active_root() / "test_prefix"
+    prefix = (
+        f"{_fetch_for_prefix_test.__module__}.{_fetch_for_prefix_test.__qualname__}__"
+    )
+    matches = [p for p in cache_dir.iterdir() if p.name.startswith(prefix)]
+    assert len(matches) == 1
 
 
 def test_enable_cache_after_disable() -> None:
