@@ -26,6 +26,11 @@ dev = [
     "pytest-cov>=5.0.0",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "live: hits real external services; skipped unless IMF_READER_LIVE_TESTS=1",
+]
+
 [tool.semantic_release]
 version_toml = [
     "pyproject.toml:project.version",

@@ -7,6 +7,9 @@ import pandas as pd
 
 from imf_reader.config import logger
 from imf_reader.weo import ValidMonths, Version
+from imf_reader.weo._shared import _drop_empty_observations
+from imf_reader.weo.scraper import KNOWN_CORRUPT_RELEASES, SDMX_RELEASES
+from imf_reader.weo.vocabulary import API_AREA_TO_LEGACY
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import (
     _legacy_weo_api_clear_cache as clear_cache,  # noqa: F401
@@ -26,6 +29,26 @@ SCALE_MULTIPLIERS = {
     6: 1_000_000,
     9: 1_000_000_000,
 }
+
+# Column order both WEO paths (this module and weo/translate.py) return, so
+# frames from either can be concatenated without reindexing.
+OUTPUT_COLUMNS = [
+    "UNIT_CODE",
+    "CONCEPT_CODE",
+    "REF_AREA_CODE",
+    "REF_AREA_IMF_CODE",
+    "FREQ_CODE",
+    "LASTACTUALDATE",
+    "SCALE_CODE",
+    "NOTES",
+    "TIME_PERIOD",
+    "OBS_VALUE",
+    "UNIT_LABEL",
+    "CONCEPT_LABEL",
+    "REF_AREA_LABEL",
+    "FREQ_LABEL",
+    "SCALE_LABEL",
+]
 
 
 @dataframe_cache(ttl=timedelta(hours=1), sublayer="weo_api")
@@ -66,16 +89,25 @@ def _fetch_version_mapping() -> dict[Version, str]:
 
 
 def get_weo_versions() -> list[Version]:
-    """Fetch all available WEO versions from the IMF API.
+    """Fetch all WEO versions this package can serve.
+
+    This is the union of the API's dataflow mapping and the discontinued SDMX
+    bulk archive (``scraper.SDMX_RELEASES``), minus the two releases that are
+    corrupt in the IMF's own published archive (``scraper.KNOWN_CORRUPT_RELEASES``).
+    It is not merely what the API reports: ``get_weo_data(version=None)`` resolves
+    "latest" against the API mapping alone, so a version appearing here is not a
+    guarantee that ``get_weo_data`` can fetch it — the SDMX-only releases go
+    through ``fetch_data``'s scraper fallback instead.
 
     Returns:
         List of Version tuples (month, year) sorted newest first.
-        e.g. [("October", 2025), ("April", 2025)]
+        e.g. [("October", 2025), ("April", 2025), ..., ("April", 2019)]
     """
     mapping = _fetch_version_mapping()
-    versions = list(mapping.keys())
-    versions.sort(key=lambda v: (v[1], 0 if v[0] == "April" else 1), reverse=True)
-    return versions
+    versions = (set(mapping.keys()) | set(SDMX_RELEASES)) - KNOWN_CORRUPT_RELEASES
+    result = list(versions)
+    result.sort(key=lambda v: (v[1], 0 if v[0] == "April" else 1), reverse=True)
+    return result
 
 
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")
@@ -116,19 +148,25 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
 
     Renames columns, adds label columns for codes, and fixes data types.
 
+    Adds ``REF_AREA_IMF_CODE``, a compatibility column carrying the legacy IMF
+    numeric area code for each row (null for areas with no legacy code, e.g.
+    ``LIE``). It exists so code migrating off the numeric ``REF_AREA_CODE``
+    has a one-line path to it; it is slated for removal in 3.0.
+
     Args:
         df: DataFrame from API.
 
     Returns:
         DataFrame with old-style column names, labels, and correct data types.
     """
+    df = _drop_empty_observations(df)
+
     # Fetch codelists for labels (with caching)
     country_labels = _fetch_codelist("IMF.RES", "CL_WEO_COUNTRY")
     indicator_labels = _fetch_codelist("IMF.RES", "CL_WEO_INDICATOR")
     unit_labels = _fetch_codelist("IMF", "CL_UNIT")
     freq_labels = _fetch_codelist("IMF", "CL_FREQ")
 
-    # Rename columns to match old format
     df = df.rename(
         columns={
             "COUNTRY": "REF_AREA_CODE",
@@ -139,7 +177,10 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
         }
     )
 
-    # Add label columns
+    df["REF_AREA_IMF_CODE"] = (
+        df["REF_AREA_CODE"].map(API_AREA_TO_LEGACY).astype("Int64")
+    )
+
     df["REF_AREA_LABEL"] = df["REF_AREA_CODE"].map(country_labels)
     df["CONCEPT_LABEL"] = df["CONCEPT_CODE"].map(indicator_labels)
     df["UNIT_LABEL"] = df["UNIT_CODE"].map(unit_labels)
@@ -167,14 +208,12 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
     df["SCALE_CODE"] = scale_exponent.map(SCALE_MULTIPLIERS)
 
     # Fix data types to match old parser
-    # Numeric columns
     df["OBS_VALUE"] = df["OBS_VALUE"].astype("Float64")
     df["SCALE_CODE"] = df["SCALE_CODE"].astype("Int64")
     df["TIME_PERIOD"] = pd.to_numeric(df["TIME_PERIOD"], errors="coerce").astype(
         "Int64"
     )
 
-    # String columns
     string_columns = [
         "UNIT_CODE",
         "CONCEPT_CODE",
@@ -189,25 +228,7 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
     for col in string_columns:
         df[col] = df[col].astype("string")
 
-    # Select and order columns to match old format
-    output_columns = [
-        "UNIT_CODE",
-        "CONCEPT_CODE",
-        "REF_AREA_CODE",
-        "FREQ_CODE",
-        "LASTACTUALDATE",
-        "SCALE_CODE",
-        "NOTES",
-        "TIME_PERIOD",
-        "OBS_VALUE",
-        "UNIT_LABEL",
-        "CONCEPT_LABEL",
-        "REF_AREA_LABEL",
-        "FREQ_LABEL",
-        "SCALE_LABEL",
-    ]
-
-    return df[output_columns]
+    return df[OUTPUT_COLUMNS]
 
 
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")

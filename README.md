@@ -70,6 +70,53 @@ print(weo.fetch_data.last_version_fetched)
 # >>> ('April', 2024) or whichever version was just fetched
 ```
 
+To see which versions are available to fetch, call `get_weo_versions`.
+
+```python
+weo.get_weo_versions()
+# >>> [('October', 2025), ('April', 2025), ..., ('April', 2019)]
+```
+
+#### Coverage and known issues
+
+WEO data comes from two sources, joined at April 2025:
+
+- **April 2025 onward** is served by the IMF's SDMX API.
+- **April 2019 through April 2025** is served by the bulk SDMX archive. The IMF
+  discontinued the bulk archive after the April 2025 release, so no further release
+  will ever be added to it.
+
+Both sources are translated onto one vocabulary: `REF_AREA_CODE` is ISO3 (e.g. `USA`)
+or a `G`-prefixed aggregate code (e.g. `G001`) on both paths, and `UNIT_CODE`,
+`REF_AREA_LABEL`, `UNIT_LABEL`, and `CONCEPT_LABEL` follow the API's vocabulary and
+codelists on both paths too. Rows with a null `OBS_VALUE` are dropped on both paths.
+
+`PPPGDP`, `PPPPC`, `PPPEX`, and `NGDPRPPPPC` have a null `UNIT_CODE`. This is not a
+bug: the IMF's own API publishes no unit at all for these four PPP / "international
+dollar" concepts, and its `CL_UNIT` codelist has no code for "international dollar"
+to translate to.
+
+`LE`, `LP`, and `LUR` carry a `UNIT_CODE` (`PE`, `PT`) on releases served from the
+bulk archive and a null one on releases served from the API. The API publishes no
+unit for these concepts, and the archive's unit varies by area as well as by concept,
+so it cannot be carried forward to areas the API adds later. Read `CONCEPT_CODE` or
+`CONCEPT_LABEL` rather than `UNIT_CODE` when working across versions for population,
+employment, or unemployment.
+
+A `REF_AREA_IMF_CODE` column carries the legacy numeric IMF area code on both paths
+(null for areas that never had one, e.g. `LIE`). It's a compatibility column for code
+migrating off the numeric area code, and is slated for removal in 3.0.
+
+Two releases in the bulk archive, **April 2021** and **October 2023**, are corrupt
+in the IMF's own published files: the CRC-32 of the inner XML does not match, and
+re-downloading reproduces the same bytes with a stable SHA-256 matching
+`Content-Length`. They cannot be fetched by any means. `get_weo_versions()` omits
+them; fetching one directly raises `cache.BulkPayloadCorruptError` with
+`is_retryable=False`.
+
+`NOTES` and `LASTACTUALDATE` are only populated for releases before October 2025 —
+the API does not expose observation-level notes or last-actual-date.
+
 #### Caching
 
 Caching is used to avoid multiple requests to the IMF website for the same data and to enhance

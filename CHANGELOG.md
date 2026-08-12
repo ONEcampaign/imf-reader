@@ -1,7 +1,40 @@
 # Changelog
 
-## v1.6.0 (2026-08-11)
+## v2.0.0 (2026-08-11)
 
+- `weo.get_weo_versions()` now reports every WEO release this package can fetch — the API's
+  dataflow mapping plus the discontinued bulk SDMX archive (April 2019 through April 2025) —
+  instead of only the two versions the API currently exposes. It is now exported from
+  `imf_reader.weo`. `get_weo_data(version=None)` is unaffected: it still resolves "latest" against
+  the API mapping alone.
+- April 2021 and October 2023 are corrupt in the IMF's own published SDMX archive and cannot be
+  fetched by any means. `get_weo_versions()` omits them; fetching one raises
+  `cache.BulkPayloadCorruptError` with `is_retryable=False` and an explanation. See the README's
+  "Coverage and known issues" section.
+- The pre-April-2025 historical path (the bulk SDMX archive) is fetchable again. In v1.5.0 the IMF
+  put its download page behind bot management and every one of those eleven releases raised
+  `ConnectionError`; `fetch_data` can now reach all of them.
+- The bulk SDMX path and the API path now return the same identifier vocabulary. `REF_AREA_CODE`
+  is ISO3 (e.g. `USA`) or a `G`-prefixed aggregate code (e.g. `G001`) on both paths, where the
+  bulk path previously returned the legacy numeric area code. `UNIT_CODE`, `REF_AREA_LABEL`,
+  `UNIT_LABEL`, and `CONCEPT_LABEL` now follow the API's vocabulary and codelists on both paths
+  too. This is a breaking change for the bulk SDMX path.
+- Rows with a null `OBS_VALUE` are now dropped on both paths. Historical row counts fall by
+  roughly a third, and about 7 series-level notes are dropped along with the rows that carried
+  them.
+- `PPPGDP`, `PPPPC`, `PPPEX`, and `NGDPRPPPPC` now have a null `UNIT_CODE`, where the legacy data
+  carried `T`, `F`, and `S`. This is deliberate, not a regression: the IMF's own API publishes no
+  unit at all for these four PPP / "international dollar" concepts, and `CL_UNIT` has no code for
+  "international dollar" to translate to.
+- `LE`, `LP`, and `LUR` carry a `UNIT_CODE` (`PE`, `PT`) on releases served from the bulk archive
+  (April 2019 to April 2025) and a null one on releases served from the API (April 2025 onward).
+  The API publishes no unit for these concepts either, and the bulk archive's unit depends on the
+  area as well as the concept, so it cannot be carried forward to areas the API adds later. Code
+  that reads `UNIT_CODE` for population, employment, or unemployment should not assume it is
+  populated across versions; `CONCEPT_CODE` and `CONCEPT_LABEL` are stable for these series.
+- A new `REF_AREA_IMF_CODE` column is added on both paths, carrying the legacy numeric IMF area
+  code for each row (null for areas that never had one, e.g. `LIE`). It's a compatibility column
+  for code migrating off the numeric area code, and is slated for removal in 3.0.
 - `imf-reader` now requires Python 3.12 or later. Users on Python 3.10 or 3.11 keep resolving to
   the 1.5.x series.
 - The default cache directory moves to a shared `readerkit` root: `~/.cache/readerkit/v1/imf-reader/<version>/`
