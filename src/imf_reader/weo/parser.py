@@ -1,5 +1,7 @@
 """Script to parse data from the IMF WEO website."""
 
+from __future__ import annotations
+
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
