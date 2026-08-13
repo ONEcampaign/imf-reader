@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.1 (2026-08-13)
+
+- Removed the `readerkit<0.2` upper bound. `readerkit` is a sibling package released in step with
+  this one, so capping it only served to block installs the moment readerkit's next minor landed.
+  The requirement is now `readerkit>=0.1.0`.
+- No functional changes. The remainder of this release is tooling: ruff, ty and pre-commit
+  configuration matching the rest of the bblocks family, dev dependencies consolidated onto PEP 735
+  dependency groups, and refreshed GitHub Actions and build backend versions.
+
 ## v2.0.0 (2026-08-12)
 
 - `weo.get_weo_versions()` now reports every WEO release this package can fetch — the API's
