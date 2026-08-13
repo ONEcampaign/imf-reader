@@ -112,3 +112,7 @@ repos:
         additional_dependencies:
           - mdformat-gfm>=1.0.0
           - mdformat-frontmatter>=2.1.0
+        # The docs tree is Material-flavoured Markdown. mdformat parses
+        # `!!! note` bodies as an indented code block and dedents them, which
+        # silently breaks every admonition on the published site.
+        exclude: ^docs/

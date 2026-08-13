@@ -1,0 +1,12 @@
+site_name: tools/imf-reader
+site_description: Python package for accessing IMF data
+
+nav:
+  - Home: index.md
+  - Why imf-reader: why-imf-reader.md
+  - Getting started: getting-started.md
+  - World Economic Outlook: weo.md
+  - WEO coverage and known issues: weo-coverage.md
+  - Special Drawing Rights: sdr.md
+  - Caching: caching.md
+  - Changelog: changelog.md

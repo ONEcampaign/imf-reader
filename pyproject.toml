@@ -14,6 +14,12 @@ dependencies = [
     "readerkit>=0.1.0",
 ]
 
+[project.urls]
+homepage = "https://docs.one.org/tools/imf-reader/"
+documentation = "https://docs.one.org/tools/imf-reader/"
+repository = "https://github.com/ONEcampaign/imf-reader"
+issues = "https://github.com/ONEcampaign/imf-reader/issues"
+
 [tool.pytest.ini_options]
 markers = [
     "live: hits real external services; skipped unless IMF_READER_LIVE_TESTS=1",
@@ -40,10 +46,8 @@ dev = [
     "pre-commit>=4.6.0",
 ]
 docs = [
-    "sphinx>=7.3.7",
-    "myst-nb>=1.1.0",
-    "sphinx-autoapi>=3.0.0",
-    "sphinx-rtd-theme>=2.0.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
 ]
 
 [tool.ruff]

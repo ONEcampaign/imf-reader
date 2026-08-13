@@ -1,0 +1,75 @@
+# this workflow checks that the docs tree still builds and that its
+# admonitions are intact, since docs.one.org includes docs/mkdocs.yml at
+# its own build time and a break here fails the build in that repo
+
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    name: Build docs
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.0
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install docs dependencies
+        run: uv sync --group docs
+
+      - name: Build the site
+        # --strict turns warnings into errors, so a broken relative link or a
+        # nav entry pointing at a missing file fails here instead of in
+        # ONEcampaign/docs
+        run: uv run mkdocs build --strict --site-dir "$RUNNER_TEMP/site"
+        working-directory: docs
+
+      - name: Check admonition indentation
+        # A Material admonition body must be indented 4 spaces. Dedented bodies
+        # are valid Markdown, so --strict passes them, but they render as an
+        # empty callout followed by a stray paragraph. mdformat rewrites them
+        # this way, which is why docs/ is excluded from that hook.
+        run: |
+          python3 - <<'PY'
+          import glob
+          import re
+          import sys
+
+          broken = []
+          for path in sorted(glob.glob("docs/docs/*.md")):
+              lines = open(path, encoding="utf-8").read().split("\n")
+              for i, line in enumerate(lines):
+                  if not re.match(r"^!!!\s+\w+", line):
+                      continue
+                  body = i + 1
+                  while body < len(lines) and lines[body].strip() == "":
+                      body += 1
+                  if body >= len(lines) or not lines[body].startswith("    "):
+                      broken.append(f"{path}:{i + 1}: {line.strip()}")
+
+          if broken:
+              print("Admonition bodies must be indented 4 spaces:\n")
+              print("\n".join(broken))
+              sys.exit(1)
+
+          print("All admonition bodies are correctly indented.")
+          PY
