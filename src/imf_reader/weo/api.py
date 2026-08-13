@@ -1,20 +1,21 @@
 """IMF World Economic Outlook (WEO) API client."""
 
+import contextlib
 from datetime import datetime, timedelta
 from io import StringIO
 
 import pandas as pd
 
-from imf_reader.config import logger
-from imf_reader.weo import ValidMonths, Version
-from imf_reader.weo._shared import _drop_empty_observations
-from imf_reader.weo.scraper import KNOWN_CORRUPT_RELEASES, SDMX_RELEASES
-from imf_reader.weo.vocabulary import API_AREA_TO_LEGACY
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import (
     _legacy_weo_api_clear_cache as clear_cache,  # noqa: F401
 )
+from imf_reader.config import logger
 from imf_reader.utils import make_get_request
+from imf_reader.weo import ValidMonths, Version
+from imf_reader.weo._shared import _drop_empty_observations
+from imf_reader.weo.scraper import KNOWN_CORRUPT_RELEASES, SDMX_RELEASES
+from imf_reader.weo.vocabulary import API_AREA_TO_LEGACY
 
 # Standard scale labels
 SCALE_LABELS = {
@@ -73,12 +74,10 @@ def _fetch_version_mapping() -> dict[Version, str]:
 
         for ann in df.get("annotations", []):
             if ann.get("id") == "lastUpdatedAt":
-                try:
+                with contextlib.suppress(ValueError, KeyError):
                     last_updated = datetime.fromisoformat(
                         ann["value"].replace("Z", "+00:00")
                     )
-                except (ValueError, KeyError):
-                    pass
 
         if last_updated:
             year = last_updated.year
@@ -289,4 +288,4 @@ def get_weo_data(version: Version | None = None) -> pd.DataFrame:
 # Preserve the .cache_clear attribute on the public symbol so any caller that
 # relied on get_weo_data.cache_clear() (the dataframe_cache contract) keeps
 # working after the wrapper-vs-resolver split.
-get_weo_data.cache_clear = _get_weo_data_cached.cache_clear  # type: ignore[attr-defined]
+get_weo_data.cache_clear = _get_weo_data_cached.cache_clear  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]

@@ -90,7 +90,7 @@ class TestApiAreaToLegacy:
 
     def test_is_strict_inverse(self):
         expected = {api: legacy for legacy, api in LEGACY_AREA_TO_API.items()}
-        assert API_AREA_TO_LEGACY == expected
+        assert expected == API_AREA_TO_LEGACY
 
     def test_same_length_as_forward_map(self):
         """A collision in the forward map would silently shrink the inverse."""

@@ -4,14 +4,14 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from imf_reader.weo import Version
-from imf_reader.weo.api import get_weo_data, get_weo_versions
-from imf_reader.weo.scraper import SDMXScraper
-from imf_reader.weo.parser import SDMXParser
-from imf_reader.weo.translate import to_api_vocabulary
-from imf_reader.config import logger, NoDataError
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import _legacy_weo_clear_cache as clear_cache  # noqa: F401
+from imf_reader.config import NoDataError, logger
+from imf_reader.weo import Version
+from imf_reader.weo.api import get_weo_data, get_weo_versions
+from imf_reader.weo.parser import SDMXParser
+from imf_reader.weo.scraper import SDMXScraper
+from imf_reader.weo.translate import to_api_vocabulary
 
 
 def validate_version(version: tuple) -> Version:
@@ -39,8 +39,8 @@ def validate_version(version: tuple) -> Version:
     if not isinstance(year, int):
         try:
             year = int(year)
-        except ValueError:
-            raise TypeError("Invalid year. Must be an integer")
+        except ValueError as e:
+            raise TypeError("Invalid year. Must be an integer") from e
 
     return month, year
 
@@ -131,8 +131,8 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
             version = validate_version(version)
         except Exception as e:
             raise NoDataError(
-                f"Could not fetch data for version: {version[0]} {version[1]}. {str(e)}"
-            )
+                f"Could not fetch data for version: {version[0]} {version[1]}. {e!s}"
+            ) from e
     else:
         version = get_weo_versions()[0]
 
@@ -150,6 +150,6 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
             latest_version = roll_back_version(version)
             return fetch_data(latest_version)
 
-    fetch_data.last_version_fetched = version
+    fetch_data.last_version_fetched = version  # ty: ignore[unresolved-attribute]
 
     return df

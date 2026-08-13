@@ -14,8 +14,7 @@ import pandas as pd
 import pytest
 
 import imf_reader.cache.config as cfg
-import imf_reader.cache as cache
-
+from imf_reader import cache
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -94,6 +93,7 @@ def test_clear_cache_all_removes_every_sublayer(tmp_cache: Path) -> None:
 def test_sdr_clear_cache_removes_disk_files(tmp_cache: Path) -> None:
     """Populating the SDR cache then calling clear_cache() removes the files."""
     from datetime import timedelta
+
     from imf_reader.cache.dataframe import dataframe_cache
 
     calls: list[int] = []
@@ -169,6 +169,7 @@ def test_scoped_clear_leaves_other_sublayers_intact(tmp_cache: Path) -> None:
     sublayers have been populated in the same process.
     """
     from datetime import timedelta
+
     from imf_reader.cache.dataframe import dataframe_cache
 
     @dataframe_cache(ttl=timedelta(days=7), sublayer="sdr")

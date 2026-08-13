@@ -2,17 +2,18 @@
 
 import io
 import xml.etree.ElementTree as ET
+from datetime import datetime
+from unittest.mock import patch
 from zipfile import ZipFile
 
-import pytest
-from unittest.mock import patch
-from datetime import datetime
 import pandas as pd
+import pytest
 
-from imf_reader.weo import reader, translate as translate_module
+from imf_reader.config import NoDataError
+from imf_reader.weo import reader
+from imf_reader.weo import translate as translate_module
 from imf_reader.weo.api import OUTPUT_COLUMNS
 from imf_reader.weo.scraper import SDMXScraper
-from imf_reader.config import NoDataError
 
 
 def _build_sdmx_zip_bytes(
@@ -101,7 +102,7 @@ def test_validate_version():
         reader.validate_version(("March", 2024))
 
     # Test that the function raises a TypeError for an invalid year
-    with pytest.raises(TypeError, match="Invalid year. Must be an integer"):
+    with pytest.raises(TypeError, match=r"Invalid year\. Must be an integer"):
         reader.validate_version(("April", "twenty twenty four"))
 
     # Test that the function raises a TypeError for an invalid version format
@@ -183,7 +184,7 @@ def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
 @patch("imf_reader.weo.reader.roll_back_version")
 @patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data_handles_NoDataError(
+def test_fetch_data_handles_no_data_error(
     mock_get_weo_data, mock_get_weo_versions, mock_roll_back_version, mock_fetch
 ):
     """Test for fetch_data method when the API fails and falls back to scraper with rollback"""

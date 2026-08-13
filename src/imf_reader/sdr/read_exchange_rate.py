@@ -13,11 +13,10 @@ from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.config import logger
 from imf_reader.utils import make_post_request
 
-
 BASE_URL = "https://www.imf.org/external/np/fin/data/rms_sdrv.aspx"
 
 
-def get_exchange_rates_data():
+def get_exchange_rates_data() -> pd.DataFrame:
     """Read the data from the IMF website"""
 
     data = {
@@ -35,7 +34,7 @@ def get_exchange_rates_data():
         raise ValueError(f"Could not parse data. Error: {e}") from e
 
 
-def preprocess_data(df: pd.DataFrame):
+def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Preprocess the input DataFrame by splitting columns and setting headers.
     """
@@ -52,7 +51,7 @@ def preprocess_data(df: pd.DataFrame):
     return df
 
 
-def extract_exchange_series(df: pd.DataFrame, col_val: str):
+def extract_exchange_series(df: pd.DataFrame, col_val: str) -> pd.Series:
     """
     Extract the exchange rate series for the given column value.
     """
@@ -61,7 +60,7 @@ def extract_exchange_series(df: pd.DataFrame, col_val: str):
     )
 
 
-def extract_dates_series(df: pd.DataFrame):
+def extract_dates_series(df: pd.DataFrame) -> pd.Series:
     """
     Extract the dates series from the DataFrame.
     """
@@ -73,7 +72,7 @@ def extract_dates_series(df: pd.DataFrame):
     )
 
 
-def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]):
+def parse_data(df: pd.DataFrame, unit_basis: Literal["SDR", "USD"]) -> pd.DataFrame:
     """Parse the data from the IMF website"""
 
     # Validate unit basis

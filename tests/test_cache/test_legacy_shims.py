@@ -36,9 +36,11 @@ def _reset_config(tmp_path: Path) -> None:
 def test_weo_clear_cache_emits_deprecation_warning() -> None:
     from imf_reader.weo import clear_cache
 
-    with pytest.warns(DeprecationWarning, match="imf_reader.weo.clear_cache"):
-        with patch("imf_reader.cache.clear_cache") as mock_cc:
-            clear_cache()
+    with (
+        pytest.warns(DeprecationWarning, match="imf_reader.weo.clear_cache"),
+        patch("imf_reader.cache.clear_cache") as mock_cc,
+    ):
+        clear_cache()
 
     mock_cc.assert_called_once()
 
@@ -46,9 +48,8 @@ def test_weo_clear_cache_emits_deprecation_warning() -> None:
 def test_weo_clear_cache_message_contains_replacement() -> None:
     from imf_reader.weo import clear_cache
 
-    with pytest.warns(DeprecationWarning) as rec:
-        with patch("imf_reader.cache.clear_cache"):
-            clear_cache()
+    with pytest.warns(DeprecationWarning) as rec, patch("imf_reader.cache.clear_cache"):
+        clear_cache()
 
     assert "imf_reader.cache.clear_cache" in str(rec[0].message)
 
@@ -67,9 +68,8 @@ def test_weo_clear_cache_no_warning_at_import() -> None:
 def test_weo_clear_cache_signature() -> None:
     from imf_reader.weo import clear_cache
 
-    with patch("imf_reader.cache.clear_cache"):
-        with pytest.warns(DeprecationWarning):
-            result = clear_cache()
+    with patch("imf_reader.cache.clear_cache"), pytest.warns(DeprecationWarning):
+        result = clear_cache()
     assert result is None
 
 
@@ -81,17 +81,18 @@ def test_weo_clear_cache_signature() -> None:
 def test_weo_api_clear_cache_emits_deprecation_warning() -> None:
     from imf_reader.weo.api import clear_cache
 
-    with pytest.warns(DeprecationWarning, match="imf_reader.weo.api.clear_cache"):
-        with patch("imf_reader.cache.clear_cache"):
-            clear_cache()
+    with (
+        pytest.warns(DeprecationWarning, match="imf_reader.weo.api.clear_cache"),
+        patch("imf_reader.cache.clear_cache"),
+    ):
+        clear_cache()
 
 
 def test_weo_api_clear_cache_message_contains_replacement() -> None:
     from imf_reader.weo.api import clear_cache
 
-    with pytest.warns(DeprecationWarning) as rec:
-        with patch("imf_reader.cache.clear_cache"):
-            clear_cache()
+    with pytest.warns(DeprecationWarning) as rec, patch("imf_reader.cache.clear_cache"):
+        clear_cache()
 
     assert "imf_reader.cache.clear_cache" in str(rec[0].message)
 
@@ -99,9 +100,8 @@ def test_weo_api_clear_cache_message_contains_replacement() -> None:
 def test_weo_api_clear_cache_signature() -> None:
     from imf_reader.weo.api import clear_cache
 
-    with patch("imf_reader.cache.clear_cache"):
-        with pytest.warns(DeprecationWarning):
-            result = clear_cache()
+    with patch("imf_reader.cache.clear_cache"), pytest.warns(DeprecationWarning):
+        result = clear_cache()
     assert result is None
 
 
@@ -113,17 +113,18 @@ def test_weo_api_clear_cache_signature() -> None:
 def test_sdr_clear_cache_emits_deprecation_warning() -> None:
     from imf_reader.sdr import clear_cache
 
-    with pytest.warns(DeprecationWarning, match="imf_reader.sdr.clear_cache"):
-        with patch("imf_reader.cache.clear_cache"):
-            clear_cache()
+    with (
+        pytest.warns(DeprecationWarning, match="imf_reader.sdr.clear_cache"),
+        patch("imf_reader.cache.clear_cache"),
+    ):
+        clear_cache()
 
 
 def test_sdr_clear_cache_message_contains_replacement() -> None:
     from imf_reader.sdr import clear_cache
 
-    with pytest.warns(DeprecationWarning) as rec:
-        with patch("imf_reader.cache.clear_cache"):
-            clear_cache()
+    with pytest.warns(DeprecationWarning) as rec, patch("imf_reader.cache.clear_cache"):
+        clear_cache()
 
     assert "imf_reader.cache.clear_cache" in str(rec[0].message)
 
@@ -131,9 +132,8 @@ def test_sdr_clear_cache_message_contains_replacement() -> None:
 def test_sdr_clear_cache_signature() -> None:
     from imf_reader.sdr import clear_cache
 
-    with patch("imf_reader.cache.clear_cache"):
-        with pytest.warns(DeprecationWarning):
-            result = clear_cache()
+    with patch("imf_reader.cache.clear_cache"), pytest.warns(DeprecationWarning):
+        result = clear_cache()
     assert result is None
 
 

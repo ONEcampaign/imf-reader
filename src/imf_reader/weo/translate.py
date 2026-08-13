@@ -100,7 +100,9 @@ def _translate_unit_code(concept_codes: pd.Series, unit_codes: pd.Series) -> pd.
         ValueError: A pair is in neither ``LEGACY_UNIT_TO_API`` nor
             ``UNIT_PAIRS_WITH_NO_API_UNIT``.
     """
-    pairs = pd.Series(list(zip(concept_codes, unit_codes)), index=concept_codes.index)
+    pairs = pd.Series(
+        list(zip(concept_codes, unit_codes, strict=True)), index=concept_codes.index
+    )
     known = set(LEGACY_UNIT_TO_API) | set(UNIT_PAIRS_WITH_NO_API_UNIT)
     unmapped = set(pairs) - known
     if unmapped:

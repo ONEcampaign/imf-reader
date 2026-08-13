@@ -5,12 +5,12 @@ import pytest
 
 from imf_reader.sdr.read_interest_rate import (
     BASE_URL,
-    get_interest_rates_data,
-    preprocess_data,
     _filter_data,
     _format_data,
     clean_data,
     fetch_interest_rates,
+    get_interest_rates_data,
+    preprocess_data,
 )
 
 

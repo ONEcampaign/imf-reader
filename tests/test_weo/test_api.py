@@ -72,7 +72,7 @@ class TestGetWeoVersions:
         silently falling back to the SDMX-only list."""
         mock_mapping.side_effect = ConnectionError("api.imf.org unreachable")
 
-        with pytest.raises(ConnectionError, match="api.imf.org unreachable"):
+        with pytest.raises(ConnectionError, match=r"api\.imf\.org unreachable"):
             api.get_weo_versions()
 
 

@@ -58,14 +58,16 @@ sdr.clear_cache()
 
 """
 
-from imf_reader.sdr.read_interest_rate import (
-    fetch_interest_rates as fetch_interest_rates,
+from imf_reader.cache.legacy import _legacy_sdr_clear_cache as clear_cache  # noqa: F401
+from imf_reader.sdr.read_announcements import (
+    fetch_allocations_holdings as fetch_allocations_holdings,
+)
+from imf_reader.sdr.read_announcements import (
+    fetch_latest_allocations_holdings_date as fetch_latest_allocations_holdings_date,
 )
 from imf_reader.sdr.read_exchange_rate import (
     fetch_exchange_rates as fetch_exchange_rates,
 )
-from imf_reader.sdr.read_announcements import (
-    fetch_allocations_holdings as fetch_allocations_holdings,
-    fetch_latest_allocations_holdings_date as fetch_latest_allocations_holdings_date,
+from imf_reader.sdr.read_interest_rate import (
+    fetch_interest_rates as fetch_interest_rates,
 )
-from imf_reader.cache.legacy import _legacy_sdr_clear_cache as clear_cache  # noqa: F401

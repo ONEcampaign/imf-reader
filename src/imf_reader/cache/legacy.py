@@ -30,7 +30,11 @@ def _legacy_weo_clear_cache() -> None:
        Use :func:`imf_reader.cache.clear_cache` instead.
     """
     warnings.warn(_MSGS["weo"], DeprecationWarning, stacklevel=2)
-    from imf_reader.cache import clear_cache
+    # Imported here, not at module level, so a caller who patches
+    # imf_reader.cache.clear_cache (the supported umbrella entry point) still
+    # affects this shim — a top-level import would bind our own frozen
+    # reference at import time instead of looking it up per call.
+    from imf_reader.cache import clear_cache  # noqa: PLC0415
 
     clear_cache(scope="weo")
 
@@ -42,7 +46,7 @@ def _legacy_weo_api_clear_cache() -> None:
        Use :func:`imf_reader.cache.clear_cache` instead.
     """
     warnings.warn(_MSGS["weo_api"], DeprecationWarning, stacklevel=2)
-    from imf_reader.cache import clear_cache
+    from imf_reader.cache import clear_cache  # noqa: PLC0415
 
     clear_cache(scope="weo")
 
@@ -54,6 +58,6 @@ def _legacy_sdr_clear_cache() -> None:
        Use :func:`imf_reader.cache.clear_cache` instead.
     """
     warnings.warn(_MSGS["sdr"], DeprecationWarning, stacklevel=2)
-    from imf_reader.cache import clear_cache
+    from imf_reader.cache import clear_cache  # noqa: PLC0415
 
     clear_cache(scope="sdr")
