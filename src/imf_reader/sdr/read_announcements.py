@@ -26,8 +26,8 @@ def read_tsv(url: str) -> pd.DataFrame:
     try:
         return pd.read_csv(url, delimiter="/t", engine="python")
 
-    except pd.errors.ParserError:
-        raise ValueError("SDR data not available for this date")
+    except pd.errors.ParserError as e:
+        raise ValueError("SDR data not available for this date") from e
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -59,7 +59,7 @@ def format_date(month: int, year: int) -> str:
 def get_holdings_and_allocations_data(
     year: int,
     month: int,
-):
+) -> pd.DataFrame:
     """Get sdr allocations and holdings data for a given month and year"""
 
     date = format_date(month, year)
@@ -89,7 +89,11 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     table = soup.find_all("table")[4]
     row = table.find_all("tr")[1]
 
-    date = row.td.text.strip()
+    td = row.td
+    if td is None:
+        raise ValueError("Could not find the latest SDR announcement date in the page")
+
+    date = td.text.strip()
     date = datetime.strptime(date, "%B %d, %Y")
 
     return date.year, date.month

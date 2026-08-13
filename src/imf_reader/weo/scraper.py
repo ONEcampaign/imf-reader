@@ -67,8 +67,10 @@ def _sdmx_url_candidates(month: str, year: int) -> list[str]:
     """
     try:
         abbr = _MONTH_ABBR[month]
-    except KeyError:
-        raise ValueError(f"Unsupported month: {month!r}. Expected April or October.")
+    except KeyError as e:
+        raise ValueError(
+            f"Unsupported month: {month!r}. Expected April or October."
+        ) from e
 
     filename = f"weo{abbr}{year}-sdmxdata.zip"
     month_segment_url = f"{MEDIA_BASE}/{year}/{month.lower()}/{filename}"
@@ -151,7 +153,7 @@ def _corrupt_release_note(month: str, year: int) -> str | None:
 
 
 def _build_corrupt_error(
-    message: str, month: str, year: int, **kwargs
+    message: str, month: str, year: int, **kwargs: str | None
 ) -> BulkPayloadCorruptError:
     """Build a BulkPayloadCorruptError for a validation failure.
 

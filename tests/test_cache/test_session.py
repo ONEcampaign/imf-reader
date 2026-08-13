@@ -12,8 +12,8 @@ import requests
 import requests_cache
 
 import imf_reader.cache.config as cfg
-from imf_reader.cache import reset_cache_dir, set_cache_dir
 from imf_reader import utils
+from imf_reader.cache import reset_cache_dir, set_cache_dir
 
 
 def _mock_dataflow_response():
@@ -111,9 +111,11 @@ class TestStaleIfErrorFalse:
         second_resp.status_code = 500
         second_resp.raise_for_status.side_effect = http_error
 
-        with patch.object(session, "get", return_value=second_resp):
-            with pytest.raises(ConnectionError):
-                utils.make_get_request(url)
+        with (
+            patch.object(session, "get", return_value=second_resp),
+            pytest.raises(ConnectionError),
+        ):
+            utils.make_get_request(url)
 
 
 class TestMakePostRequestErrorTranslation:
@@ -122,19 +124,23 @@ class TestMakePostRequestErrorTranslation:
 
     def test_requests_exception_becomes_connection_error(self, tmp_cache_root):
         session = cfg.get_session()
-        with patch.object(
-            session, "post", side_effect=requests.exceptions.RequestException("boom")
+        with (
+            patch.object(
+                session,
+                "post",
+                side_effect=requests.exceptions.RequestException("boom"),
+            ),
+            pytest.raises(ConnectionError, match="Could not connect to"),
         ):
-            with pytest.raises(ConnectionError, match="Could not connect to"):
-                utils.make_post_request("http://example.com/post")
+            utils.make_post_request("http://example.com/post")
 
     def test_transport_error_becomes_connection_error(self, tmp_cache_root):
         session = cfg.get_session()
-        with patch.object(
-            session, "post", side_effect=readerkit.TransportError("boom")
+        with (
+            patch.object(session, "post", side_effect=readerkit.TransportError("boom")),
+            pytest.raises(ConnectionError, match="Could not connect to"),
         ):
-            with pytest.raises(ConnectionError, match="Could not connect to"):
-                utils.make_post_request("http://example.com/post")
+            utils.make_post_request("http://example.com/post")
 
     def test_http_error_connection_error_names_the_status_code(self, tmp_cache_root):
         err_resp = MagicMock()
@@ -143,9 +149,11 @@ class TestMakePostRequestErrorTranslation:
         resp.raise_for_status.side_effect = requests.HTTPError(response=err_resp)
 
         session = cfg.get_session()
-        with patch.object(session, "post", return_value=resp):
-            with pytest.raises(ConnectionError, match="Status code: 503"):
-                utils.make_post_request("http://example.com/post")
+        with (
+            patch.object(session, "post", return_value=resp),
+            pytest.raises(ConnectionError, match="Status code: 503"),
+        ):
+            utils.make_post_request("http://example.com/post")
 
 
 class TestGetWeoVersionsHttpCaching:

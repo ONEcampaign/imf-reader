@@ -75,7 +75,7 @@ def test_april_2025_matches_across_both_paths(tmp_cache_root):
         suffixes=("_api", "_sdmx"),
         indicator=True,
     )
-    only_one_side = merged.loc[merged["_merge"] != "both", KEY_COLUMNS + ["_merge"]]
+    only_one_side = merged.loc[merged["_merge"] != "both", [*KEY_COLUMNS, "_merge"]]
     assert only_one_side.empty, (
         f"paths disagree on which observations exist:\n{only_one_side}"
     )

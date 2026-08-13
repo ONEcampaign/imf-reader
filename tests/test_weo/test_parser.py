@@ -1,12 +1,13 @@
 """Tests for weo parser module."""
 
-import pytest
-from unittest.mock import patch
-import pandas as pd
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
-from imf_reader.weo.parser import SDMXParser
+import pandas as pd
+import pytest
+
 from imf_reader.config import UnexpectedFileError
+from imf_reader.weo.parser import SDMXParser
 
 
 class TestSDMXParser:
@@ -87,18 +88,20 @@ class TestSDMXParser:
         ns = {"xs": "http://www.w3.org/2001/XMLSchema"}
 
         # Create a mock schema tree
-        root = ET.Element("{%s}schema" % ns["xs"], attrib={"xmlns:xs": ns["xs"]})
-        simpleType = ET.SubElement(
-            root, "{%s}simpleType" % ns["xs"], attrib={"name": "IMF.CL_WEO_UNIT.1.0"}
+        root = ET.Element(f"{{{ns['xs']}}}schema", attrib={"xmlns:xs": ns["xs"]})
+        simple_type = ET.SubElement(
+            root,
+            f"{{{ns['xs']}}}simpleType",
+            attrib={"name": "IMF.CL_WEO_UNIT.1.0"},
         )
         restriction = ET.SubElement(
-            simpleType, "{%s}restriction" % ns["xs"], attrib={"base": "xs:string"}
+            simple_type, f"{{{ns['xs']}}}restriction", attrib={"base": "xs:string"}
         )
         enumeration = ET.SubElement(
-            restriction, "{%s}enumeration" % ns["xs"], attrib={"value": "A"}
+            restriction, f"{{{ns['xs']}}}enumeration", attrib={"value": "A"}
         )
-        annotation = ET.SubElement(enumeration, "{%s}annotation" % ns["xs"])
-        documentation = ET.SubElement(annotation, "{%s}documentation" % ns["xs"])
+        annotation = ET.SubElement(enumeration, f"{{{ns['xs']}}}annotation")
+        documentation = ET.SubElement(annotation, f"{{{ns['xs']}}}documentation")
         documentation.text = "Current international dollar"
         tree = ET.ElementTree(root)
 

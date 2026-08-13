@@ -1,8 +1,11 @@
 """Script to parse data from the IMF WEO website."""
 
-import pandas as pd
+from __future__ import annotations
+
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
+
+import pandas as pd
 
 from imf_reader.config import UnexpectedFileError, logger
 
@@ -31,7 +34,7 @@ class SDMXParser:
     """
 
     @staticmethod
-    def parse_xml(tree: ET.ElementTree) -> pd.DataFrame:
+    def parse_xml(tree: ET.ElementTree[ET.Element]) -> pd.DataFrame:
         """Parse the WEO XML tree and return a DataFrame with the data.
 
         Args:
@@ -41,19 +44,17 @@ class SDMXParser:
             A DataFrame with the data.
         """
 
-        rows = []  # List of dictionaries to store the data
         root = tree.getroot()
-        for series in root[1]:  # Datasets are in the second element of the root
-            for obs in series:
-                rows.append({**series.attrib, **obs.attrib})
+        # Datasets are in the second element of the root
+        rows = [{**series.attrib, **obs.attrib} for series in root[1] for obs in series]
 
         logger.debug("XML parsed successfully")
         return pd.DataFrame(rows)
 
     @staticmethod
     def lookup_schema_element(
-        schema_tree: ET.ElementTree, field_name
-    ) -> dict[str, str]:
+        schema_tree: ET.ElementTree[ET.Element], field_name: str
+    ) -> dict[str, str | None]:
         """Lookup the elements in the schema and find the label for a given label_name.
 
         Args:
@@ -68,7 +69,7 @@ class SDMXParser:
         query = schema_tree.findall(xpath_expr)
 
         # Loop through the query and create a dictionary
-        lookup_dict = {}
+        lookup_dict: dict[str, str | None] = {}
         for elem in query:
             lookup_dict[elem.attrib["value"]] = elem[0][0].text
 
@@ -76,7 +77,7 @@ class SDMXParser:
 
     @staticmethod
     def add_label_columns(
-        data_df: pd.DataFrame, schema_tree: ET.ElementTree
+        data_df: pd.DataFrame, schema_tree: ET.ElementTree[ET.Element]
     ) -> pd.DataFrame:
         """Maps columns with codes to columns with labels and renames the code columns.
 
@@ -137,7 +138,7 @@ class SDMXParser:
 
         # set type for the other columns to string
         for column in df.columns:
-            if column not in SDMX_NUMERIC_COLUMNS.keys():
+            if column not in SDMX_NUMERIC_COLUMNS:
                 df[column] = df[column].astype("string")
 
         return df
@@ -158,12 +159,12 @@ class SDMXParser:
         # Get the data and schema trees
         data_tree = ET.parse(
             sdmx_folder.open(
-                [file for file in sdmx_folder.namelist() if file.endswith(".xml")][0]
+                next(f for f in sdmx_folder.namelist() if f.endswith(".xml"))
             )
         )
         schema_tree = ET.parse(
             sdmx_folder.open(
-                [file for file in sdmx_folder.namelist() if file.endswith(".xsd")][0]
+                next(f for f in sdmx_folder.namelist() if f.endswith(".xsd"))
             )
         )
 

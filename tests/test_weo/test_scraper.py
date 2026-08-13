@@ -212,7 +212,7 @@ class TestSDMXScraperCacheIntegration:
 
     @patch("imf_reader.weo.scraper.bulk_fetcher")
     @patch("imf_reader.weo.scraper.SDMXScraper.get_sdmx_url")
-    def test_scrape_corrupt_zip_raises_BulkPayloadCorruptError(
+    def test_scrape_corrupt_zip_raises_bulk_payload_corrupt_error(
         self, mock_get_sdmx_url, mock_bulk_fetcher
     ):
         """A non-zip payload must raise BulkPayloadCorruptError and leave no cache entry."""

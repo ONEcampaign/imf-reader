@@ -9,7 +9,7 @@ assignment on the wrapper (e.g. fetch_data.last_version_fetched = ...).
 import functools
 import logging
 import pickle
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -66,20 +66,20 @@ def dataframe_cache(
             return None
 
         def _is_fresh(path: Path) -> bool:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
             # Windows' system clock is coarser (~16ms) than the timestamp NTFS
             # stamps on a write, so a file written moments ago can carry an
             # mtime a few milliseconds ahead of datetime.now(). Clamping keeps
             # that skew from producing a negative age, which compares as less
             # than every ttl and would make a zero-ttl entry look fresh.
-            age = max(datetime.now(tz=timezone.utc) - mtime, timedelta(0))
+            age = max(datetime.now(tz=UTC) - mtime, timedelta(0))
             return age < ttl
 
         def _read(path: Path) -> Any:
             if path.suffix == ".parquet":
                 return pd.read_parquet(path)
             with path.open("rb") as f:
-                return pickle.load(f)  # noqa: S301 — trusted local cache files only
+                return pickle.load(f)
 
         def _write(path: Path, result: Any) -> None:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -121,7 +121,7 @@ def dataframe_cache(
 
         # Attach cache_clear so sdr/clear_cache.py and user code can clear this
         # function's entries without reaching into module internals.
-        wrapper.cache_clear = _do_cache_clear  # type: ignore[attr-defined]
+        wrapper.cache_clear = _do_cache_clear  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]
 
         return wrapper
 

@@ -43,29 +43,30 @@ If you are proposing a feature:
 Ready to contribute? Here's how to set up `imf_reader` for local development.
 
 1. Download a copy of `imf_reader` locally.
-2. Install `imf_reader` using `uv`:
+
+1. Install `imf_reader` using `uv`:
 
    ```console
    $ uv sync
    ```
 
-3. Use `git` (or similar) to create a branch for local development and make your changes:
+1. Use `git` (or similar) to create a branch for local development and make your changes:
 
    ```console
    $ git checkout -b name-of-your-bugfix-or-feature
    ```
 
-4. When you're done making changes, check that your changes conform to any code formatting requirements and pass any tests.
+1. When you're done making changes, check that your changes conform to any code formatting requirements and pass any tests.
 
-5. Commit your changes and open a pull request.
+1. Commit your changes and open a pull request.
 
 ## Pull Request Guidelines
 
 Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include additional tests if appropriate.
-2. If the pull request adds functionality, the docs should be updated.
-3. The pull request should work for all currently supported operating systems and versions of Python.
+1. If the pull request adds functionality, the docs should be updated.
+1. The pull request should work for all currently supported operating systems and versions of Python.
 
 ## Code of Conduct
 

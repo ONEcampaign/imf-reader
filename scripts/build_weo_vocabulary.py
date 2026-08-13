@@ -120,7 +120,7 @@ def _fingerprint(
     df["_key"] = df["CONCEPT_CODE"] + "|" + df["TIME_PERIOD"].astype(str)
     df["_val"] = df["OBS_VALUE"].astype(float).round(4)
     return {
-        str(area): frozenset(zip(group["_key"], group["_val"]))
+        str(area): frozenset(zip(group["_key"], group["_val"], strict=True))
         for area, group in df.groupby(area_col)
     }
 
@@ -188,8 +188,8 @@ def resolve_area_codes(
     labels: dict[int, str] = {}
     for df in frames.values():
         pairs = df[["REF_AREA_CODE", "REF_AREA_LABEL"]].drop_duplicates()
-        for code, label in pairs.itertuples(index=False):
-            code = int(code)
+        for raw_code, label in pairs.itertuples(index=False):
+            code = int(raw_code)
             all_codes.add(code)
             if label and code not in labels:
                 labels[code] = label
@@ -373,8 +373,7 @@ def _format_dict_literal(
 def _format_frozenset_literal(name: str, annotation: str, items: list[str]) -> str:
     """Render `name: annotation = frozenset({...})`, one item per line."""
     lines = [f"{name}: {annotation} = frozenset({{"]
-    for item_repr in items:
-        lines.append(f"    {item_repr},")
+    lines.extend(f"    {item_repr}," for item_repr in items)
     lines.append("})")
     return "\n".join(lines)
 

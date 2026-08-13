@@ -9,11 +9,10 @@ from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.config import logger
 from imf_reader.utils import make_post_request
 
-
 BASE_URL: str = "https://www.imf.org/external/np/fin/data/sdr_ir.aspx"
 
 
-def get_interest_rates_data():
+def get_interest_rates_data() -> pd.DataFrame:
     """Read the data from the IMF website"""
 
     data = {
@@ -31,7 +30,7 @@ def get_interest_rates_data():
         raise ValueError(f"Could not parse data. Error: {e}") from e
 
 
-def preprocess_data(df: pd.DataFrame):
+def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Preprocess the input DataFrame by splitting columns and setting headers.
     """

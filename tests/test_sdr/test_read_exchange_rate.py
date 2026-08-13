@@ -4,13 +4,13 @@ import pandas as pd
 import pytest
 
 from imf_reader.sdr.read_exchange_rate import (
-    preprocess_data,
+    BASE_URL,
+    extract_dates_series,
+    extract_exchange_series,
     fetch_exchange_rates,
     get_exchange_rates_data,
-    extract_exchange_series,
-    extract_dates_series,
     parse_data,
-    BASE_URL,
+    preprocess_data,
 )
 
 
