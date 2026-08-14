@@ -7,5 +7,14 @@ Version = tuple[ValidMonths, int]  # Type hint for version as a tuple of month a
 from imf_reader.cache.legacy import (  # noqa: E402,F401
     _legacy_weo_clear_cache as clear_cache,
 )
+from imf_reader.weo.api import (  # noqa: E402
+    SERIES_METADATA_JOIN_KEYS as SERIES_METADATA_JOIN_KEYS,
+)
 from imf_reader.weo.api import get_weo_versions as get_weo_versions  # noqa: E402
 from imf_reader.weo.reader import fetch_data as fetch_data  # noqa: E402
+from imf_reader.weo.reader import (  # noqa: E402
+    fetch_data_with_metadata as fetch_data_with_metadata,
+)
+from imf_reader.weo.reader import (  # noqa: E402
+    fetch_series_metadata as fetch_series_metadata,
+)

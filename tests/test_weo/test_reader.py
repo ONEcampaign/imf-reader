@@ -15,7 +15,7 @@ from imf_reader.config import (
 )
 from imf_reader.weo import reader
 from imf_reader.weo import translate as translate_module
-from imf_reader.weo.api import OUTPUT_COLUMNS
+from imf_reader.weo.api import OUTPUT_COLUMNS, FlowRef
 from imf_reader.weo.scraper import SDMXScraper
 
 
@@ -192,9 +192,9 @@ def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
     mock_get_weo_data, mock_scrape, cache_disabled
 ):
     """An explicit version that neither the API nor the bulk scraper can serve
-    raises, never falling back to a different release under the caller's
-    requested label. Roll-back is only for an unresolved version=None
-    request."""
+    raises rather than falling back to a different release under the
+    caller's requested label. Roll-back is only for an unresolved
+    version=None request."""
 
     mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
     mock_scrape.side_effect = NoDataError("no data")
@@ -341,3 +341,68 @@ def test_fetch_wires_scrape_parse_and_translate_together(
     # of after, this would still read "111" (or fail outright), not "USA".
     assert row["REF_AREA_CODE"] == "USA"
     assert row["UNIT_CODE"] == "XDC"
+
+
+@patch("imf_reader.weo.reader.get_series_metadata")
+@patch("imf_reader.weo.reader._resolve_flow_ref")
+def test_fetch_series_metadata_returns_data_and_sets_last_version_fetched(
+    mock_resolve_flow_ref, mock_get_series_metadata
+):
+    mock_resolve_flow_ref.return_value = (("October", 2025), FlowRef("WEO", "9.0.0"))
+    mock_data = pd.DataFrame({"REF_AREA_CODE": ["USA"], "CONCEPT_CODE": ["NGDP_RPCH"]})
+    mock_get_series_metadata.return_value = mock_data
+
+    df = reader.fetch_series_metadata(("October", 2025))
+
+    pd.testing.assert_frame_equal(df, mock_data)
+    mock_get_series_metadata.assert_called_once_with(("October", 2025))
+    assert reader.fetch_series_metadata.last_version_fetched == ("October", 2025)
+
+
+@patch.object(SDMXScraper, "scrape")
+@patch("imf_reader.weo.reader._fetch")
+@patch("imf_reader.weo.reader._resolve_flow_ref")
+def test_fetch_series_metadata_unavailable_version_raises_without_bulk_fallback(
+    mock_resolve_flow_ref, mock_fetch, mock_scrape
+):
+    """Anti-regression for the silent-boundary rule: series metadata has no
+    bulk-archive fallback, so April 2020 -- unservable by the API -- must
+    raise VersionNotAvailableError rather than quietly falling through to the
+    SDMX scraper the way fetch_data's roll-back would."""
+    mock_resolve_flow_ref.side_effect = VersionNotAvailableError("not available")
+
+    with pytest.raises(VersionNotAvailableError):
+        reader.fetch_series_metadata(("April", 2020))
+
+    mock_scrape.assert_not_called()
+    mock_fetch.assert_not_called()
+
+
+@patch("imf_reader.weo.reader.get_weo_versions")
+@patch("imf_reader.weo.reader.get_series_metadata")
+@patch("imf_reader.weo.reader._resolve_flow_ref")
+def test_fetch_series_metadata_does_not_roll_back_when_resolved_latest_fails(
+    mock_resolve_flow_ref, mock_get_series_metadata, mock_get_weo_versions
+):
+    """fetch_series_metadata raises once when the version resolved as
+    'latest' cannot be served, unlike fetch_data, which rolls back to an
+    older release: there is no bulk archive to land on here, so a failure
+    must raise rather than walking get_weo_versions() for a second candidate
+    to try."""
+    mock_resolve_flow_ref.return_value = (("October", 2025), FlowRef("WEO", "9.0.0"))
+    mock_get_series_metadata.side_effect = VersionNotAvailableError("not available")
+
+    with pytest.raises(VersionNotAvailableError):
+        reader.fetch_series_metadata()
+
+    mock_resolve_flow_ref.assert_called_once()
+    mock_get_series_metadata.assert_called_once()
+    mock_get_weo_versions.assert_not_called()
+
+
+def test_fetch_series_metadata_invalid_version_raises_no_data_error():
+    """Mirrors fetch_data's own validate_version handling: a malformed
+    version tuple is a caller error, wrapped into NoDataError rather than
+    surfacing validate_version's bare TypeError."""
+    with pytest.raises(NoDataError):
+        reader.fetch_series_metadata(("March", 2024))

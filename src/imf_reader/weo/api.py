@@ -3,7 +3,7 @@
 import re
 from datetime import timedelta
 from io import StringIO
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import pandas as pd
 
@@ -103,9 +103,9 @@ def _flow_precedence(ref: FlowRef) -> tuple[bool, tuple[int, ...]]:
 def _probe_publication_date(dataflow_id: str, api_version: str) -> Version:
     """Label one dataflow version by probing its ``PUBLICATION_DATE`` attribute.
 
-    The ``lastUpdatedAt`` structure annotation is deliberately not used here:
-    it is inverted on live flows, which is the source of the version
-    mislabelling this probe exists to fix. The probe is a single-observation
+    The ``lastUpdatedAt`` structure annotation is inverted on live flows --
+    the source of the version mislabelling this probe exists to fix -- so
+    probing ``PUBLICATION_DATE`` avoids it. The probe is a single-observation
     request (~0.5s) and sits under the same 1-hour mapping cache and 1-day
     HTTP cache as the rest of this module, so the cost is nil.
 
@@ -153,7 +153,7 @@ def _fetch_flow_mapping() -> dict[Version, FlowRef]:
     key, a schema change that drops ``id`` -- raises ``DataflowDiscoveryError``
     rather than returning an empty (or vintage-only) mapping: the IMF has
     always published a bare ``WEO`` flow, so its absence means the catalogue
-    response itself is unusable, not that no data exists.
+    response itself is unusable, distinct from there being no data to serve.
 
     Results are cached for 1 hour to avoid redundant HTTP calls.
 
@@ -317,30 +317,111 @@ _METADATA_JOIN_KEY_RENAME = {
     if key in _METADATA_JOIN_KEYS
 }
 
+# Public: the columns get_series_metadata's and get_weo_data's frames share,
+# for a caller merging the two themselves. Derived from
+# _METADATA_JOIN_KEY_RENAME rather than hand-duplicated, so the two cannot
+# drift apart.
+SERIES_METADATA_JOIN_KEYS: tuple[str, ...] = tuple(_METADATA_JOIN_KEY_RENAME.values())
+
 # LATEST_ACTUAL_ANNUAL_DATA is either a plain year ("2024") or a fiscal-year
 # form ("FY2023/24", 10.7% of populated series -- the bulk archive has no FY
 # forms at all). Group 1 catches the FY form's leading year, group 2 the
 # plain form; anything else matches neither and becomes <NA>.
 _LATEST_ACTUAL_ANNUAL_DATA_RE = re.compile(r"^(?:FY(\d{4})/\d{2}|(\d{4}))$")
 
+# Bumped whenever _fetch_series_metadata's returned column set or dtypes
+# change. Threaded through as a cache-key discriminator (see below) because a
+# warm 7-day parquet written under an older schema would otherwise be served
+# to code that expects the new one -- the version-scoped cache root does not
+# save this, since editable and git installs stay inside the same version
+# segment (see CHANGELOG.md).
+_SIDECAR_SCHEMA = "2"
+
+# Matches the SDMX-CSV writer's multi-value-delimiter marker on a header,
+# e.g. "TOPIC[]" or "STRUCTURE[;]". The marker names the writer's own
+# intra-cell delimiter, not the DSD component id, so stripping it makes the
+# column name attribute-accessible, usable in df.query(), and joinable to
+# the codelist by its real id.
+_MULTI_VALUE_SUFFIX_RE = re.compile(r"\[[^\]]*\]$")
+
+# SDMX envelope columns and firstNObservations=1 artefacts, dropped from the
+# sidecar before caching -- never data this package or its callers can use.
+# Matched post-normalisation, since the literal header is "STRUCTURE[;]".
+_SIDECAR_ENVELOPE_COLUMNS = frozenset(
+    {"STRUCTURE", "STRUCTURE_ID", "ACTION", "TIME_PERIOD", "OBS_VALUE"}
+)
+
+# Dropped from the public series-metadata frame only (get_series_metadata),
+# kept in the cached artefact because _join_series_metadata still needs
+# them. COUNTRY_UPDATE_DATE collides by name with a fetch_data column
+# sourced identically, so a user merge would produce _x/_y. UNIT and SCALE
+# duplicate UNIT_CODE/SCALE_CODE, and SCALE is actively dangerous, since the
+# sidecar carries the bare exponent (e.g. 9) while fetch_data's SCALE_CODE
+# carries the multiplier (1000000000) that exponent is converted to in
+# _align_schema.
+_SERIES_METADATA_EXCLUDED = frozenset({"COUNTRY_UPDATE_DATE", "UNIT", "SCALE"})
+
+
+def _normalise_sidecar_columns(columns: pd.Index) -> dict[str, str]:
+    """Map each raw sidecar header to its normalised name, stripping a
+    trailing multi-value-delimiter marker such as ``[]`` or ``[;]``.
+
+    Raises:
+        ValueError: two columns normalise to the same name.
+    """
+    normalised: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for original in columns:
+        stripped = _MULTI_VALUE_SUFFIX_RE.sub("", original)
+        colliding = seen.get(stripped)
+        if colliding is not None:
+            raise ValueError(
+                f"Sidecar columns {colliding!r} and {original!r} both "
+                f"normalise to {stripped!r}"
+            )
+        seen[stripped] = original
+        normalised[original] = stripped
+    return normalised
+
 
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")
-def _fetch_series_metadata(ref: FlowRef) -> pd.DataFrame:
+def _fetch_series_metadata(ref: FlowRef, schema: str = _SIDECAR_SCHEMA) -> pd.DataFrame:
     """Fetch series-level metadata for one dataflow: one row per (country,
     indicator, frequency).
 
     Uses the ``attributes=series&firstNObservations=1`` sidecar (~300 KB on
     the wire) rather than reading metadata off the main data CSV: the main
-    fetch's default attribute set is not a stable column set across dataflow
-    versions -- it moves release to release as the IMF's DSD changes -- so
-    every metadata column this package publishes comes from this sidecar
-    uniformly, never from whatever the primary fetch happens to carry.
+    fetch's default attribute set moves release to release as the IMF's DSD
+    changes, so every metadata column this package publishes comes from this
+    sidecar uniformly.
 
-    Returns only the columns this package uses, so the cached parquet stays
-    small; the caller (``_join_series_metadata``) is responsible for parsing
-    and renaming them.
+    Returns every sidecar column except the SDMX envelope and
+    ``firstNObservations=1`` artefacts (``_SIDECAR_ENVELOPE_COLUMNS``): a
+    deny-list, not an allow-list, since an allow-list would silently drop
+    every attribute the IMF adds to the DSD and ``KeyError`` on every one it
+    removes, as the API's attribute set changes across dataflow versions.
+    Column names are normalised first (bracket suffix stripped, see
+    ``_normalise_sidecar_columns``), so the cached artefact and every
+    deny-list downstream are written against normalised names.
+
+    ``schema`` is a cache-key discriminator (``@dataframe_cache`` bakes its
+    default into the key via ``bind().apply_defaults()``), bumped whenever
+    this function's returned column set or dtypes change. Callers must not
+    pass it explicitly.
+
+    Every column is read as ``string`` rather than left to type inference:
+    inference would give e.g. ``BASE_YEAR`` ``float64`` (``1990.0``),
+    ``DECIMALS_DISPLAYED`` ``int64``, ``KEY_INDICATOR`` possibly ``bool``,
+    and those inferences move between releases and across the pandas support
+    range.
 
     Results are cached for 7 days, matching the primary data fetch's TTL.
+    Checking for a column a caller relies on (e.g.
+    ``LATEST_ACTUAL_ANNUAL_DATA``) belongs to the callers that need those
+    specific columns, so a sidecar missing one gets cached once rather than
+    re-fetched on every call for a condition that will not resolve until the
+    next release. A transient network failure still writes nothing, since
+    ``make_get_request`` raising means there is no return value to cache.
     """
     url = (
         "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/"
@@ -352,8 +433,9 @@ def _fetch_series_metadata(ref: FlowRef) -> pd.DataFrame:
     response = make_get_request(
         url, headers={"Accept": "text/csv"}, use_http_cache=False
     )
-    df = pd.read_csv(StringIO(response.text), low_memory=False)
-    return df[_SIDECAR_RAW_COLUMNS]
+    df = pd.read_csv(StringIO(response.text), low_memory=False, dtype="string")
+    df = df.rename(columns=_normalise_sidecar_columns(df.columns))
+    return df.drop(columns=[c for c in _SIDECAR_ENVELOPE_COLUMNS if c in df.columns])
 
 
 def _parse_latest_actual_annual_data(raw: pd.Series) -> pd.Series:
@@ -401,8 +483,8 @@ def _with_null_metadata_columns(df: pd.DataFrame) -> pd.DataFrame:
     correct dtype -- what ships when the metadata sidecar can't be trusted.
 
     This is the same null result existing callers of the API path already
-    see for the first two columns, so degrading here does not regress
-    anything they depend on.
+    see for the first two columns, so degrading here leaves that behaviour
+    unchanged.
     """
     df["LASTACTUALDATE"] = pd.array([pd.NA] * len(df), dtype="Int64")
     df["NOTES"] = pd.array([pd.NA] * len(df), dtype="string")
@@ -420,9 +502,7 @@ def _join_series_metadata(df: pd.DataFrame, ref: FlowRef) -> pd.DataFrame:
     sits outside ``_get_weo_data_cached``'s 7-day cache (the caller is
     ``get_weo_data``, after that cache lookup has already returned), while
     ``_fetch_series_metadata`` above has its own 7-day cache. So a sidecar
-    failure -- a transient network blip -- costs only the call that hit it,
-    never seven days of null metadata served from a warm observations cache
-    that has no reason to know the sidecar failed.
+    failure -- a transient network blip -- costs only the call that hit it.
 
     ``df`` has already been through ``_align_schema``'s rename by the time it
     gets here, so it carries REF_AREA_CODE/CONCEPT_CODE/FREQ_CODE rather than
@@ -440,6 +520,14 @@ def _join_series_metadata(df: pd.DataFrame, ref: FlowRef) -> pd.DataFrame:
     """
     try:
         meta = _fetch_series_metadata(ref)
+        # _fetch_series_metadata returns the whole widened sidecar (see its
+        # docstring). This narrows it back to the six columns this function
+        # uses. Placement inside the try is load-bearing: a DSD change that
+        # drops one of these columns raises KeyError here, which this except
+        # degrades to null metadata rather than exploding -- never a
+        # "fixable" regression, since get_series_metadata is the place a
+        # caller who wants the raw widened frame should use instead.
+        meta = meta[_SIDECAR_RAW_COLUMNS]
     except Exception as exc:
         logger.warning(
             "Failed to fetch series metadata for %s %s: %s; LASTACTUALDATE, "
@@ -461,14 +549,13 @@ def _join_series_metadata(df: pd.DataFrame, ref: FlowRef) -> pd.DataFrame:
         )
         return _with_null_metadata_columns(df)
 
-    # The main fetch's own default attribute set is not a stable column set
-    # across dataflow versions (WEO 6.0.0's DSD carries
-    # LATEST_ACTUAL_ANNUAL_DATA, WEO 9.0.0's carries COUNTRY_UPDATE_DATE,
-    # neither carries both) -- so ``df`` may already have a raw copy of one
-    # of the sidecar's columns. Drop it before merging: every metadata value
-    # this package publishes must come from the sidecar uniformly, never
-    # from whatever the main CSV happens to carry, and left unmerged that
-    # copy would collide with the sidecar's during the join and pandas would
+    # The main fetch's own default attribute set changes across dataflow
+    # versions (WEO 6.0.0's DSD carries LATEST_ACTUAL_ANNUAL_DATA, WEO
+    # 9.0.0's carries COUNTRY_UPDATE_DATE, neither carries both) -- so
+    # ``df`` may already have a raw copy of one of the sidecar's columns.
+    # Drop it before merging: every metadata value this package publishes
+    # must come from the sidecar uniformly, and left unmerged that copy
+    # would collide with the sidecar's during the join and pandas would
     # suffix both instead of leaving a plain COUNTRY_UPDATE_DATE column. This
     # also covers a warm parquet entry carrying the full 16 legacy-named
     # columns under an unchanged cache key: COUNTRY_UPDATE_DATE in that entry
@@ -585,7 +672,7 @@ def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_api")
 def _get_weo_data_cached(version: Version, ref: FlowRef) -> pd.DataFrame:
-    """Inner cached fetch — keyed on a *resolved* (month, year) tuple AND the
+    """Inner cached fetch -- keyed on a *resolved* (month, year) tuple AND the
     FlowRef that serves it.
 
     ``ref`` is threaded in as a real, required argument rather than
@@ -613,8 +700,7 @@ def _get_weo_data_cached(version: Version, ref: FlowRef) -> pd.DataFrame:
     ``_join_series_metadata``, which sits under its own independent 7-day
     cache (``_fetch_series_metadata``). Observations and series metadata are
     cached independently, so a transient sidecar failure costs only the call
-    that hit it and never degrades a warm observations cache to null
-    metadata for seven days.
+    that hit it.
     """
     logger.info(f"Fetching WEO data from API: {version[0]} {version[1]}")
     url = (
@@ -632,6 +718,56 @@ def _get_weo_data_cached(version: Version, ref: FlowRef) -> pd.DataFrame:
     return _align_schema(df)
 
 
+def _resolve_flow_ref(
+    version: Version | None,
+    *,
+    purpose: Literal["observations", "series metadata"],
+) -> tuple[Version, FlowRef]:
+    """Resolve a requested (or ``None`` for "latest") version to the FlowRef
+    that serves it, against the API's own dataflow mapping alone -- never
+    ``get_weo_versions()``'s SDMX-inclusive union, so "latest" always
+    resolves to a release the API can serve.
+
+    Resolution happens before any cache lookup at the call site, for both
+    ``version=None`` and an explicit version, so both the version-mapping
+    TTL and a flow remapping take effect immediately instead of being
+    shadowed by a longer-TTL cache entry keyed on a (month, year) label
+    alone.
+
+    ``purpose`` names what the caller is trying to do ("observations" or
+    "series metadata"), so the ``VersionNotAvailableError`` raised for an
+    unservable version can point at the right next step: ``get_weo_data``'s
+    bulk-archive fallback for observations, or the API-coverage boundary and
+    ``get_weo_versions()`` for series metadata, which has no bulk fallback
+    at all.
+
+    Raises:
+        VersionNotAvailableError: ``version`` (explicit or resolved) is not
+            in the API's dataflow mapping.
+    """
+    mapping = _fetch_flow_mapping()
+
+    if version is None:
+        versions = list(mapping.keys())
+        versions.sort(key=lambda v: (v[1], 0 if v[0] == "April" else 1), reverse=True)
+        version = versions[0]
+
+    if version not in mapping:
+        if purpose == "series metadata":
+            raise VersionNotAvailableError(
+                f"Version {version} not available from the API. Series "
+                "metadata has no bulk-archive fallback, so it is only "
+                "served for versions the API itself carries. "
+                f"Available: {list(mapping.keys())}"
+            )
+        raise VersionNotAvailableError(
+            f"Version {version} not available from the API. "
+            f"Available: {list(mapping.keys())}"
+        )
+
+    return version, mapping[version]
+
+
 def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data for a specific version.
 
@@ -644,25 +780,7 @@ def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     Returns:
         DataFrame with WEO data.
     """
-    # Resolve the FlowRef BEFORE the cache lookup -- not just "latest" when
-    # version is None, but also which dataflow serves an explicit version --
-    # so both the version-mapping TTL and a flow remapping take effect
-    # immediately instead of being shadowed by a 7-day-TTL cache entry keyed
-    # on a (month, year) label alone. See _get_weo_data_cached's docstring.
-    mapping = _fetch_flow_mapping()
-
-    if version is None:
-        versions = list(mapping.keys())
-        versions.sort(key=lambda v: (v[1], 0 if v[0] == "April" else 1), reverse=True)
-        version = versions[0]
-
-    if version not in mapping:
-        raise VersionNotAvailableError(
-            f"Version {version} not available from the API. "
-            f"Available: {list(mapping.keys())}"
-        )
-
-    ref = mapping[version]
+    version, ref = _resolve_flow_ref(version, purpose="observations")
     # The observations cache (_get_weo_data_cached) and the series metadata
     # sidecar (_join_series_metadata -> _fetch_series_metadata) are cached
     # independently, joined here rather than inside the cached function, so a
@@ -673,7 +791,109 @@ def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     return df[OUTPUT_COLUMNS]
 
 
-# Preserve the .cache_clear attribute on the public symbol so any caller that
-# relied on get_weo_data.cache_clear() (the dataframe_cache contract) keeps
-# working after the wrapper-vs-resolver split.
+# Preserve the .cache_clear attribute on the public symbol (the
+# dataframe_cache contract) for callers that rely on
+# get_weo_data.cache_clear(): get_weo_data is an undecorated wrapper around
+# _get_weo_data_cached, so it does not inherit the attribute automatically.
 get_weo_data.cache_clear = _get_weo_data_cached.cache_clear  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]
+
+
+def _series_metadata_for_ref(ref: FlowRef) -> pd.DataFrame:
+    """Build the public series-metadata frame for one resolved release: the
+    sidecar minus ``_SERIES_METADATA_EXCLUDED``, join keys renamed and moved
+    to the front, every column cast to ``string``.
+
+    Uncached at this layer: it sits directly on top of
+    ``_fetch_series_metadata``'s own 7-day cache, so a second cache here
+    would buy nothing and would also swallow ``get_series_metadata``'s
+    ``version=None`` resolution, which must stay live on every call -- see
+    that function's docstring.
+
+    Raises:
+        ValueError: the sidecar carries a duplicated join key. This frame
+            *is* the caller's request in full, unlike
+            ``_join_series_metadata``, which drops a duplicated sidecar and
+            degrades to null columns because the caller still keeps their
+            observations: a duplicated key here has nothing to fall back to,
+            and the frame is about to be merged onto the caller's own
+            observations, where a duplicated key would fabricate rows
+            silently.
+    """
+    meta = _fetch_series_metadata(ref)
+    meta = meta.drop(
+        columns=[c for c in _SERIES_METADATA_EXCLUDED if c in meta.columns]
+    )
+    meta = meta.rename(columns=_METADATA_JOIN_KEY_RENAME)
+
+    join_keys = list(_METADATA_JOIN_KEY_RENAME.values())
+    value_columns = [c for c in meta.columns if c not in join_keys]
+    meta = meta[[*join_keys, *value_columns]]
+
+    # Unconditional even though _fetch_series_metadata already reads the CSV
+    # as "string": pd.read_parquet can hand back plain object or an
+    # Arrow-backed string dtype depending on the pandas/pyarrow pair, so
+    # without this cast a warm cache and a cold cache would return different
+    # dtypes and the merge trap at _join_series_metadata (see its docstring)
+    # would re-arm on cache hits only.
+    meta = meta.astype("string")
+
+    duplicated = meta.duplicated(subset=join_keys)
+    if duplicated.any():
+        raise ValueError(
+            f"Series metadata sidecar for {ref.dataflow_id} {ref.version} has "
+            f"{int(duplicated.sum())} row(s) with a duplicated {join_keys} key"
+        )
+
+    return meta
+
+
+def get_series_metadata(version: Version | None = None) -> pd.DataFrame:
+    """Fetch series-level metadata for one WEO release: one row per
+    ``SERIES_METADATA_JOIN_KEYS`` (REF_AREA_CODE, CONCEPT_CODE, FREQ_CODE),
+    covering every sidecar attribute beyond the three join keys.
+
+    This function and ``fetch_data`` share one HTTP fetch and one 7-day
+    cache entry (``_fetch_series_metadata``), but return separate frames:
+    this one a series-constant, dimension-table frame -- not a fact table --
+    rather than broadcasting dozens of free-text columns across
+    ``fetch_data``'s per-observation rows.
+
+    Resolves ``version=None`` against the *current* flow mapping (1-hour
+    TTL) on every call, so this function is left uncached at this layer:
+    caching it would bake that resolution into a 7-day key under the
+    literal value ``None``, and go on serving whatever release was latest on
+    the first call long after the mapping has moved past it -- the same
+    trap ``get_weo_data`` avoids by keeping its own resolution outside
+    ``_get_weo_data_cached``.
+
+    Merging the result onto the main observations frame is a caller-side
+    join on ``SERIES_METADATA_JOIN_KEYS`` (REF_AREA_CODE, CONCEPT_CODE,
+    FREQ_CODE). See ``imf_reader.weo.reader.fetch_series_metadata`` for the
+    idiom that avoids merging metadata from one release onto observations
+    from another.
+
+    Args:
+        version: Version tuple (month, year), e.g. ("October", 2025). If
+            None, uses latest as resolved against the API's own dataflow
+            mapping, not ``get_weo_versions()``'s SDMX-inclusive union: the
+            SDMX bulk archive has no series metadata endpoint at all.
+
+    Returns:
+        DataFrame with every column typed ``string`` (StringDtype),
+        including the three join keys. Only those three are guaranteed
+        present release to release -- the rest of the column set is
+        release-dependent by design, since the sidecar's own columns move as
+        the IMF's DSD changes.
+
+    Raises:
+        VersionNotAvailableError: the requested (or resolved) version is not
+            served by the API. There is no bulk-archive fallback here.
+        ConnectionError: the sidecar fetch failed. Propagated as-is rather
+            than degraded to null columns, unlike ``fetch_data``'s
+            null-and-warn behaviour: here the frame is the entire product,
+            so there is nothing left to hand back.
+        ValueError: the sidecar has a duplicated join key, or two of its
+            columns collide once their bracket suffix is stripped.
+    """
+    _, ref = _resolve_flow_ref(version, purpose="series metadata")
+    return _series_metadata_for_ref(ref)

@@ -31,16 +31,26 @@ print(cache.get_cache_dir())
 
 ## How long entries live
 
-| Data                                                                   | TTL    |
-| ---------------------------------------------------------------------- | ------ |
-| WEO observations                                                       | 7 days |
-| WEO series metadata (`LASTACTUALDATE`, `NOTES`, `COUNTRY_UPDATE_DATE`) | 7 days |
-| WEO version mapping                                                    | 1 hour |
-| SDR holdings, allocations, exchange rates, interest rates              | 7 days |
-| SDR latest-available-date lookup                                       | 1 day  |
+| Data                                                      | TTL    |
+| --------------------------------------------------------- | ------ |
+| WEO observations                                          | 7 days |
+| WEO series metadata sidecar                               | 7 days |
+| WEO version mapping                                       | 1 hour |
+| SDR holdings, allocations, exchange rates, interest rates | 7 days |
+| SDR latest-available-date lookup                          | 1 day  |
 
 WEO series metadata is cached separately from WEO observations, so a failed metadata request
 leaves the already-cached observations untouched.
+
+One cached sidecar entry backs `weo.fetch_series_metadata()` and `weo.api.get_series_metadata()`
+as well as `fetch_data`'s `LASTACTUALDATE`, `NOTES`, and `COUNTRY_UPDATE_DATE` columns, all four
+read from the same underlying fetch. Calling `fetch_series_metadata()` after `fetch_data()` (or
+the reverse) for the same release costs no extra request beyond the first one, since the second
+call is served from the entry the first one wrote.
+
+The sidecar's cache key includes a schema discriminator, so an entry written under an older
+schema is never read by code expecting a different column set: it orphans itself rather than
+being served back, and no `clear_cache()` call is needed when the schema changes.
 
 ## Redirect the cache
 
@@ -88,7 +98,7 @@ A scoped clear leaves the other scopes intact. `scope="sdr"` removes SDR data an
 
 ## The deprecated helpers
 
-`weo.clear_cache()`, `weo.api.clear_cache()`, and `sdr.clear_cache()` all still work. Each emits a `DeprecationWarning` pointing at `cache.clear_cache()` and is removed in 3.0.
+`weo.clear_cache()`, `weo.api.clear_cache()`, and `sdr.clear_cache()` continue to work but are deprecated. Each emits a `DeprecationWarning` pointing at `cache.clear_cache()` and is removed in 3.0.
 
 ```python
 from imf_reader import weo, sdr

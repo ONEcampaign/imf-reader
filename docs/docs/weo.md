@@ -160,6 +160,118 @@ The 16 columns below are identical in name, order, and meaning on both source pa
 
 See [WEO coverage and known issues](weo-coverage.md) for where these columns have gaps or quirks.
 
+## Series metadata
+
+`weo.fetch_series_metadata(version=None)` fetches the IMF's series-level metadata sidecar, one row per series, covering methodology, classification, and reporting-convention detail that `fetch_data()` doesn't carry. `imf_reader.weo.api.get_series_metadata(version=None)` is the same call at the api layer.
+
+```python
+from imf_reader import weo
+
+meta = weo.fetch_series_metadata()
+meta.shape
+```
+
+**Output:**
+
+```
+(8200, 41)
+```
+
+Only three columns are guaranteed present release to release, `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`, the join keys below. The rest of the column set is release-dependent by design, since it follows whatever attribute set the IMF's DSD carries for that release, and that attribute set moves between releases.
+
+Every column, including columns that look numeric such as `BASE_YEAR` and `DECIMALS_DISPLAYED`, is typed `string`. Native type inference for these columns changes from one release to the next. `BASE_YEAR` shows why directly. Most values are a plain year like `2013`, but some carry a fiscal-year form like `FY2003/04`, which native inference would either choke on or silently misread.
+
+### Merge onto observations
+
+`weo.fetch_data_with_metadata(version=None)` returns `fetch_data()`'s observations left-merged with `fetch_series_metadata()`'s columns on `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`, one call for both:
+
+```python
+from imf_reader import weo
+
+df = weo.fetch_data_with_metadata()
+df.shape
+```
+
+**Output:**
+
+```
+(361733, 54)
+```
+
+Two independent `version=None` calls, one to `fetch_data()` and one to `fetch_series_metadata()`, can resolve to different releases if a new one is published between them, merging one release's metadata onto another release's observations with nothing to signal the mismatch. `fetch_data_with_metadata()` closes that hole by construction. It resolves the metadata call to whatever release `fetch_data()` actually served. Doing the merge by hand needs the same pin, using `fetch_data.last_version_fetched`:
+
+```python
+from imf_reader import weo
+
+df = weo.fetch_data()
+meta = weo.fetch_series_metadata(weo.fetch_data.last_version_fetched)
+merged = df.merge(meta, on=["REF_AREA_CODE", "CONCEPT_CODE", "FREQ_CODE"], how="left")
+```
+
+Series metadata exists only for releases the API itself serves, April 2025 onward, with no bulk-archive fallback. A version the API can't serve raises `VersionNotAvailableError` rather than returning a frame of null columns, since null columns would assert that the IMF publishes no methodology for these series, when the truth is that this source has no series metadata to give at all. See [WEO coverage and known issues](weo-coverage.md#series-metadata-is-api-only).
+
+### Excluded and always-null columns
+
+Three sidecar columns are left off `fetch_series_metadata()`'s output. `COUNTRY_UPDATE_DATE` is excluded because `fetch_data()` already publishes it. `UNIT` and `SCALE` are excluded because they duplicate `UNIT_CODE` and `SCALE_CODE`. `SCALE` in particular is worth calling out even though it's excluded. The sidecar carries the bare exponent (e.g. `9`), while `fetch_data()`'s `SCALE_CODE` carries the multiplier that exponent converts to (`1000000000`). Mixing the two up silently changes a value's magnitude by a power of ten.
+
+Four columns are present but null across every one of the 8,200 series in the April 2026 release, `FUNCTIONAL_CAT`, `COICOP_1999`, `TRANSFORMATION`, and `REPORTING_PERIOD_TYPE`.
+
+### Columns holding more than one value
+
+A handful of columns hold multiple `;`-delimited values in one cell (their raw header carries a trailing `[]` marker from the IMF's CSV writer, which `fetch_series_metadata()` strips). Spacing around the delimiter isn't consistent. `TOPIC` holds values like `F32;F32_CA` with no space after the semicolon, while `FISCAL_SECTOR_GENERAL_GOVERNMENT_COMPOSITION` holds values like `Central Government; Local Government; Social Security Funds` with one. Split on `;` and strip whitespace from each piece to get a clean list:
+
+```python
+meta["TOPIC"].str.split(";").apply(lambda values: [v.strip() for v in values])
+```
+
+### Series metadata columns
+
+| Column                                                     | What it holds                                                                                                                                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `REF_AREA_CODE`                                            | Join key. ISO3 or `G`-prefixed aggregate, matching `fetch_data()`'s column of the same name                                                                                    |
+| `CONCEPT_CODE`                                             | Join key. Indicator code, matching `fetch_data()`'s column of the same name                                                                                                    |
+| `FREQ_CODE`                                                | Join key. Frequency code, matching `fetch_data()`'s column of the same name                                                                                                    |
+| `DECIMALS_DISPLAYED`                                       | Number of decimal places the IMF displays for the series                                                                                                                       |
+| `FUNCTIONAL_CAT`                                           | Functional classification category. Null across all 8,200 series in the April 2026 release                                                                                     |
+| `INT_ACC_ITEM`                                             | Balance of payments item code (BPM6), e.g. `CAB` for current account balance                                                                                                   |
+| `NA_STO`                                                   | National accounts stock or transaction code (SNA), e.g. `B1GQ` for GDP                                                                                                         |
+| `GFS_STO`                                                  | Government Finance Statistics stock or transaction code                                                                                                                        |
+| `COICOP_1999`                                              | Classification of Individual Consumption by Purpose (1999). Null across all 8,200 series in the April 2026 release                                                             |
+| `TRADE_FLOW`                                               | Trade flow direction, e.g. `XG` for exports of goods                                                                                                                           |
+| `COMMODITY`                                                | Commodity code for a commodity-price series                                                                                                                                    |
+| `SOC_CONCEPTS`                                             | Social statistics concept code, e.g. `POP` for population                                                                                                                      |
+| `SECTOR`                                                   | Institutional sector code (SNA), e.g. `S13` for general government                                                                                                             |
+| `ACCOUNTING_ENTRY`                                         | Accounting entry type, e.g. `N` for net                                                                                                                                        |
+| `INDEX_TYPE`                                               | Index type, e.g. `CPI`                                                                                                                                                         |
+| `PRICES`                                                   | Price basis, e.g. `V` for value or `Q` for volume                                                                                                                              |
+| `STATISTICAL_MEASURES`                                     | Statistical measure applied, e.g. `RT` for rate of change                                                                                                                      |
+| `EXRATE`                                                   | Exchange rate type used to convert the series, e.g. `XDC_PU`                                                                                                                   |
+| `TRANSFORMATION`                                           | Data transformation applied to the series. Null across all 8,200 series in the April 2026 release                                                                              |
+| `REPORTING_PERIOD_TYPE`                                    | Reporting period type. Null across all 8,200 series in the April 2026 release                                                                                                  |
+| `OVERLAP`                                                  | Overlap indicator between historical and projected data, e.g. `OL`                                                                                                             |
+| `TOPIC`                                                    | Subject area code(s), `;`-delimited, e.g. `F32;F32_CA`                                                                                                                         |
+| `METHODOLOGY`                                              | Name of the statistical manual the series follows, e.g. `Balance of Payments and International Investment Position Manual, sixth edition (BPM6)`                               |
+| `METHODOLOGY_NOTES`                                        | Free-text methodology note. The same field `fetch_data()`'s `NOTES` column reads on API-served releases                                                                        |
+| `KEY_INDICATOR`                                            | `true` where the IMF flags the series as one of its key indicators, otherwise null                                                                                             |
+| `SERIES_NAME`                                              | Human-readable series name                                                                                                                                                     |
+| `LATEST_ACTUAL_ANNUAL_DATA`                                | Last year of actual (non-forecast) data, preserving fiscal-year forms such as `FY2023/24`. The field `fetch_data()`'s `LASTACTUALDATE` reads and collapses to its leading year |
+| `HISTORICAL_DATA_SOURCE`                                   | National institution supplying historical data, e.g. `Central Bank`                                                                                                            |
+| `BASE_YEAR`                                                | Base year for index or volume calculations, e.g. `2013`. Occasionally a fiscal-year form such as `FY2003/04`                                                                   |
+| `START_END_MONTHS_OF_REPORTING_YEAR`                       | Start and end months of the fiscal reporting year, e.g. `January/December`                                                                                                     |
+| `CHAIN_WEIGHTED`                                           | Whether the series uses chain-weighted volume measures, e.g. `Yes, from 2000`                                                                                                  |
+| `BASIS_OF_PROJECTIONS`                                     | Basis the IMF projects the series on, e.g. `Government budget and projected nominal GDP`                                                                                       |
+| `VALUATION`                                                | Valuation basis, e.g. `Cash` or `Accrual`                                                                                                                                      |
+| `PRICES_SECTOR_HARMONIZED_PRICES`                          | Whether the sector uses harmonised prices, `Yes` or `No`                                                                                                                       |
+| `LABOR_SECTOR_EMPLOYMENT_TYPE`                             | Employment definition used for a labour-sector series, e.g. `Harmonized ILO definition`                                                                                        |
+| `FISCAL_SECTOR_GENERAL_GOVERNMENT_COMPOSITION`             | Subsectors composing "general government" for this series, `;`-delimited, e.g. `Central Government; Local Government; Social Security Funds`                                   |
+| `FISCAL_SECTOR_VALUATION_OF_DEBT`                          | Valuation basis for government debt, e.g. `Nominal value`                                                                                                                      |
+| `FISCAL_SECTOR_INSTRUMENTS_INCLUDED_IN_GROSS_AND_NET_DEBT` | Debt instruments included in gross and net debt figures, `;`-delimited                                                                                                         |
+| `TRADE_SECTOR_OIL_COVERAGE`                                | Oil product coverage for a trade-sector series, `;`-delimited                                                                                                                  |
+| `PRIMARY_DOMESTIC_CURRENCY`                                | The area's primary domestic currency, e.g. `Aruban Florin`                                                                                                                     |
+| `KEYWORDS`                                                 | Free-text search keywords, `;`-delimited                                                                                                                                       |
+
+Many of the coded columns above hold a short code rather than a label, and that code is meant to be looked up, not read on its own. The lookup is the same IMF codelist API this package's own label columns are built from. A coded column's values key into a codelist named `CL_<column name>` under `https://api.imf.org/external/sdmx/3.0/structure/codelist/IMF/`. `SECTOR`, for instance, looks up against `https://api.imf.org/external/sdmx/3.0/structure/codelist/IMF/CL_SECTOR`.
+
 ## Errors
 
 All three are importable from `imf_reader.config`:
@@ -181,7 +293,7 @@ alone.
 
 ## Clearing the cache
 
-`weo.clear_cache()` still works. It is deprecated, emits a `DeprecationWarning`, and is removed in 3.0. Use `cache.clear_cache(scope="weo")` instead. See [Caching](caching.md) for the full cache model.
+`weo.clear_cache()` works but is deprecated: it emits a `DeprecationWarning` and is removed in 3.0. Use `cache.clear_cache(scope="weo")` instead. See [Caching](caching.md) for the full cache model.
 
 ## Next steps
 

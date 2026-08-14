@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pandas as pd
 import pytest
+from readerkit import cache_key_for_call
 
 from imf_reader.config import DataflowDiscoveryError, VersionNotAvailableError
 from imf_reader.weo import api
@@ -177,8 +178,7 @@ class TestFetchFlowMapping:
 
     def test_labels_by_publication_date_not_last_updated_at(self, cache_disabled):
         """The mapping lands on the label the probe reports, not any
-        ``lastUpdatedAt`` annotation: this response carries no such field,
-        since the mapping never reads one."""
+        ``lastUpdatedAt`` annotation: this response carries no such field."""
         discovery = _discovery_response([("WEO", "9.0.0")])
         probe = _probe_response("2026-04-14T13:00:00Z")
 
@@ -431,19 +431,15 @@ class TestGetWeoDataCachedKeyIncludesFlowRef:
 
 class TestFetchSeriesMetadata:
     """_fetch_series_metadata fetches the series-attributes sidecar and
-    returns only the columns this package uses."""
+    returns every column bar the SDMX envelope and firstNObservations=1
+    artefacts -- a deny-list, not an allow-list, since an allow-list would
+    silently drop every attribute the IMF adds to the DSD and KeyError on
+    every one it removes."""
 
-    _SIDECAR_COLUMNS: ClassVar[list[str]] = [
-        "COUNTRY",
-        "INDICATOR",
-        "FREQUENCY",
-        "LATEST_ACTUAL_ANNUAL_DATA",
-        "METHODOLOGY_NOTES",
-        "COUNTRY_UPDATE_DATE",
-    ]
+    _JOIN_KEY_COLUMNS: ClassVar[list[str]] = ["COUNTRY", "INDICATOR", "FREQUENCY"]
 
     def test_requests_the_series_sidecar_url(self, cache_disabled):
-        response = _MockResponse(text=",".join(self._SIDECAR_COLUMNS) + "\n")
+        response = _MockResponse(text=",".join(self._JOIN_KEY_COLUMNS) + "\n")
 
         with patch(
             "imf_reader.weo.api.make_get_request", return_value=response
@@ -458,18 +454,146 @@ class TestFetchSeriesMetadata:
         )
         assert mock_get_request.call_args.kwargs["headers"] == {"Accept": "text/csv"}
 
-    def test_returns_only_the_documented_columns(self, cache_disabled):
+    def test_drops_sdmx_envelope_and_observation_artefacts(self, cache_disabled):
+        """STRUCTURE[;]/STRUCTURE_ID/ACTION/TIME_PERIOD/OBS_VALUE are SDMX
+        envelope columns and firstNObservations=1 artefacts. STRUCTURE is
+        matched post-normalisation, since the literal header carries the
+        "[;]" marker."""
+        columns = [
+            "STRUCTURE[;]",
+            "STRUCTURE_ID",
+            "ACTION",
+            "TIME_PERIOD",
+            "OBS_VALUE",
+            *self._JOIN_KEY_COLUMNS,
+        ]
         response = _MockResponse(
-            text=(
-                ",".join([*self._SIDECAR_COLUMNS, "VALUATION", "SERIES_NAME"]) + "\n"
-                "USA,NGDP_RPCH,A,2024,a note,9/19/2025,volume,GDP growth\n"
-            )
+            text=",".join(columns) + "\ndataflow,WEO,I,2024,1.5,USA,NGDP_RPCH,A\n"
         )
 
         with patch("imf_reader.weo.api.make_get_request", return_value=response):
             meta = api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
 
-        assert list(meta.columns) == self._SIDECAR_COLUMNS
+        for dropped in (
+            "STRUCTURE",
+            "STRUCTURE_ID",
+            "ACTION",
+            "TIME_PERIOD",
+            "OBS_VALUE",
+        ):
+            assert dropped not in meta.columns
+        assert list(meta.columns) == self._JOIN_KEY_COLUMNS
+
+    def test_normalises_bracketed_multi_value_columns(self, cache_disabled):
+        """TOPIC[] and KEYWORDS[] strip down to TOPIC and KEYWORDS: the
+        bracket marker names the SDMX-CSV writer's own intra-cell
+        delimiter, not the DSD component id, and is stripped so the column
+        stays joinable to the codelist and usable in df.query()."""
+        response = _MockResponse(
+            text=",".join([*self._JOIN_KEY_COLUMNS, "TOPIC[]", "KEYWORDS[]"]) + "\n"
+            "USA,NGDP_RPCH,A,F32;F32_CA,growth;GDP\n"
+        )
+
+        with patch("imf_reader.weo.api.make_get_request", return_value=response):
+            meta = api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+
+        assert "TOPIC" in meta.columns
+        assert "KEYWORDS" in meta.columns
+        assert "TOPIC[]" not in meta.columns
+        assert "KEYWORDS[]" not in meta.columns
+        # The raw string is left untouched -- callers who split on ";" are
+        # responsible for stripping the inconsistent spacing themselves.
+        assert meta.iloc[0]["TOPIC"] == "F32;F32_CA"
+
+    def test_raises_on_normalised_column_collision(self, cache_disabled):
+        response = _MockResponse(
+            text=",".join([*self._JOIN_KEY_COLUMNS, "TOPIC", "TOPIC[]"]) + "\n"
+            "USA,NGDP_RPCH,A,a,b\n"
+        )
+
+        with (
+            patch("imf_reader.weo.api.make_get_request", return_value=response),
+            pytest.raises(ValueError, match="TOPIC"),
+        ):
+            api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+
+    def test_unknown_column_passes_through_deny_list_not_allow_list(
+        self, cache_disabled
+    ):
+        """Regression guard for the deny-list-not-allow-list decision: a
+        column this package has never seen before must still come back
+        rather than being silently dropped, which an allow-list would do."""
+        response = _MockResponse(
+            text=",".join([*self._JOIN_KEY_COLUMNS, "SOME_FUTURE_DSD_COLUMN"]) + "\n"
+            "USA,NGDP_RPCH,A,anything\n"
+        )
+
+        with patch("imf_reader.weo.api.make_get_request", return_value=response):
+            meta = api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+
+        assert "SOME_FUTURE_DSD_COLUMN" in meta.columns
+        assert meta.iloc[0]["SOME_FUTURE_DSD_COLUMN"] == "anything"
+
+    def test_no_keyerror_when_methodology_notes_absent(self, cache_disabled):
+        """This function returns every sidecar column as-is -- narrowing to
+        what _join_series_metadata needs happens in that function's own try
+        -- so a sidecar missing METHODOLOGY_NOTES must not raise here."""
+        response = _MockResponse(
+            text=",".join(self._JOIN_KEY_COLUMNS) + "\nUSA,NGDP_RPCH,A\n"
+        )
+
+        with patch("imf_reader.weo.api.make_get_request", return_value=response):
+            meta = api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+
+        assert "METHODOLOGY_NOTES" not in meta.columns
+
+    def test_every_column_is_string_dtype_including_numeric_looking_ones(
+        self, cache_disabled
+    ):
+        """BASE_YEAR comes back as the string "1990", not the float 1990.0
+        that read_csv's type inference would otherwise produce -- that
+        inference moves release to release and across the pandas support
+        range."""
+        response = _MockResponse(
+            text=",".join([*self._JOIN_KEY_COLUMNS, "BASE_YEAR"]) + "\n"
+            "USA,NGDP_RPCH,A,1990\n"
+        )
+
+        with patch("imf_reader.weo.api.make_get_request", return_value=response):
+            meta = api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+
+        assert all(dtype == "string" for dtype in meta.dtypes)
+        assert meta.iloc[0]["BASE_YEAR"] == "1990"
+
+
+class TestFetchSeriesMetadataCacheKey:
+    """The cache key must vary with the FlowRef and with _SIDECAR_SCHEMA, so
+    a warm parquet written under one schema value is never served to code
+    expecting the column set or dtypes a different schema value names."""
+
+    def test_different_flow_refs_write_two_cache_entries(self, tmp_cache_root):
+        response = _MockResponse(text="COUNTRY,INDICATOR,FREQUENCY\nUSA,NGDP_RPCH,A\n")
+
+        with patch("imf_reader.weo.api.make_get_request", return_value=response):
+            api._fetch_series_metadata(FlowRef("WEO", "9.0.0"))
+            api._fetch_series_metadata(FlowRef("WEO_2025_OCT_VINTAGE", "1.0.0"))
+
+        # rglob rather than a hand-built path: get_active_root() appends a
+        # cache-schema and package-version segment onto tmp_cache_root that
+        # this test has no need to duplicate.
+        entries = [
+            p for p in tmp_cache_root.rglob("*") if "_fetch_series_metadata__" in p.name
+        ]
+        assert len(entries) == 2
+
+    def test_schema_discriminator_changes_the_key(self):
+        """Asserted directly against cache_key_for_call, since
+        _fetch_series_metadata is already decorated and re-decorating it
+        under a different schema default just to compare keys is awkward."""
+        ref = FlowRef("WEO", "9.0.0")
+        key_schema_2 = cache_key_for_call(api._fetch_series_metadata, ref, schema="2")
+        key_schema_3 = cache_key_for_call(api._fetch_series_metadata, ref, schema="3")
+        assert key_schema_2 != key_schema_3
 
 
 def _minimal_api_frame(rows: list[dict]) -> pd.DataFrame:
@@ -718,13 +842,80 @@ class TestJoinSeriesMetadata:
 
         assert len(result) == 2
 
+    def test_widened_sidecar_only_contributes_the_three_metadata_columns(
+        self, monkeypatch
+    ):
+        """_fetch_series_metadata returns the whole widened sidecar (see
+        TestFetchSeriesMetadata). This function must still narrow it
+        straight back to LASTACTUALDATE/NOTES/COUNTRY_UPDATE_DATE and leak
+        none of the sidecar's other value columns into get_weo_data's
+        output."""
+        df = _observation_frame([{"REF_AREA_CODE": "USA", "CONCEPT_CODE": "NGDP_RPCH"}])
+        meta = _sidecar_frame(
+            [
+                {
+                    "COUNTRY": "USA",
+                    "INDICATOR": "NGDP_RPCH",
+                    "LATEST_ACTUAL_ANNUAL_DATA": "2024",
+                    "METHODOLOGY_NOTES": "a note",
+                    "COUNTRY_UPDATE_DATE": "9/19/2025",
+                    "TOPIC": "F32",
+                    "BASE_YEAR": "1990",
+                }
+            ]
+        )
+        monkeypatch.setattr(api, "_fetch_series_metadata", lambda ref: meta)
+
+        result = api._join_series_metadata(df, FlowRef("WEO", "9.0.0"))
+
+        assert "TOPIC" not in result.columns
+        assert "BASE_YEAR" not in result.columns
+        assert set(result.columns) == {
+            *df.columns,
+            "LASTACTUALDATE",
+            "NOTES",
+            "COUNTRY_UPDATE_DATE",
+        }
+        assert result["LASTACTUALDATE"].dtype == "Int64"
+        assert result["NOTES"].dtype == "string"
+        assert result["COUNTRY_UPDATE_DATE"].dtype == "datetime64[us]"
+
+    def test_widened_sidecar_missing_a_raw_column_degrades_to_nulls(self, monkeypatch):
+        """A widened sidecar missing LATEST_ACTUAL_ANNUAL_DATA (e.g. after a
+        DSD change) must degrade through the existing except Exception
+        rather than raise a bare KeyError out of this function -- that is
+        why meta = meta[_SIDECAR_RAW_COLUMNS] sits inside the try."""
+        df = _observation_frame([{"REF_AREA_CODE": "USA", "CONCEPT_CODE": "NGDP_RPCH"}])
+        meta = pd.DataFrame(
+            [
+                {
+                    "COUNTRY": "USA",
+                    "INDICATOR": "NGDP_RPCH",
+                    "FREQUENCY": "A",
+                    "METHODOLOGY_NOTES": "a note",
+                    "COUNTRY_UPDATE_DATE": "9/19/2025",
+                    "TOPIC": "F32",
+                }
+            ]
+        )
+        monkeypatch.setattr(api, "_fetch_series_metadata", lambda ref: meta)
+
+        with patch("imf_reader.weo.api.logger.warning") as mock_warning:
+            result = api._join_series_metadata(df, FlowRef("WEO", "9.0.0"))
+
+        assert pd.isna(result.iloc[0]["LASTACTUALDATE"])
+        assert pd.isna(result.iloc[0]["NOTES"])
+        assert pd.isna(result.iloc[0]["COUNTRY_UPDATE_DATE"])
+        assert result["LASTACTUALDATE"].dtype == "Int64"
+        assert result["NOTES"].dtype == "string"
+        assert result["COUNTRY_UPDATE_DATE"].dtype == "datetime64[us]"
+        assert mock_warning.called
+
 
 class TestGetWeoDataSidecarCaching:
     """_get_weo_data_cached's observations cache and
     _fetch_series_metadata's sidecar cache are independent, so a transient
-    sidecar failure costs only the call that hit it, not seven days of null
-    metadata served from a warm observations cache that never touches the
-    sidecar again."""
+    sidecar failure costs only the call that hit it."""
 
     @patch("imf_reader.weo.api._fetch_codelist")
     @patch("imf_reader.weo.api._fetch_flow_mapping")
@@ -783,6 +974,176 @@ class TestGetWeoDataSidecarCaching:
         # the second call as a full cache hit and keep showing null metadata.
         assert call_counts["main"] == 1
         assert call_counts["sidecar"] == 2
+
+
+def _widened_sidecar_frame(rows: list[dict]) -> pd.DataFrame:
+    """A minimal widened-sidecar frame, matching what _fetch_series_metadata
+    returns: normalised names, envelope columns already gone, every column
+    "string" dtype. Defaults cover the join key and the three columns
+    _SERIES_METADATA_EXCLUDED drops, so each test only spells out what it
+    needs."""
+    defaults = {
+        "FREQUENCY": "A",
+        "COUNTRY_UPDATE_DATE": "9/19/2025",
+        "UNIT": "XDC",
+        "SCALE": "0",
+    }
+    df = pd.DataFrame([{**defaults, **row} for row in rows])
+    return df.astype("string")
+
+
+class TestSeriesMetadataForRef:
+    """_series_metadata_for_ref builds the public series-metadata frame:
+    join keys renamed and moved to the front, _SERIES_METADATA_EXCLUDED
+    dropped, every column "string"."""
+
+    def test_excludes_country_update_date_unit_and_scale(self, monkeypatch):
+        meta = _widened_sidecar_frame(
+            [{"COUNTRY": "USA", "INDICATOR": "NGDP_RPCH", "TOPIC": "F32"}]
+        )
+        monkeypatch.setattr(api, "_fetch_series_metadata", lambda ref: meta)
+
+        result = api._series_metadata_for_ref(FlowRef("WEO", "9.0.0"))
+
+        assert "COUNTRY_UPDATE_DATE" not in result.columns
+        assert "UNIT" not in result.columns
+        assert "SCALE" not in result.columns
+        assert "TOPIC" in result.columns
+
+    def test_join_keys_renamed_and_moved_to_front(self, monkeypatch):
+        meta = _widened_sidecar_frame(
+            [{"COUNTRY": "USA", "INDICATOR": "NGDP_RPCH", "TOPIC": "F32"}]
+        )
+        monkeypatch.setattr(api, "_fetch_series_metadata", lambda ref: meta)
+
+        result = api._series_metadata_for_ref(FlowRef("WEO", "9.0.0"))
+
+        assert list(result.columns)[:3] == [
+            "REF_AREA_CODE",
+            "CONCEPT_CODE",
+            "FREQ_CODE",
+        ]
+        for legacy_name in ("COUNTRY", "INDICATOR", "FREQUENCY"):
+            assert legacy_name not in result.columns
+
+    @pytest.mark.parametrize("warm", [False, True])
+    def test_every_column_is_string_dtype_cold_and_warm(self, tmp_cache_root, warm):
+        """Checks the dtype _series_metadata_for_ref hands back cold and
+        warm. This does not by itself pin the ``.astype("string")`` cast in
+        _series_metadata_for_ref: read_csv(dtype="string") already produces
+        StringDtype, and the parquet round trip restores it on current
+        pandas, so removing that cast likely leaves this test green too --
+        TestFetchDataSeriesMetadataMergeability's mergeability test is what
+        actually pins the cast, confirmed by mutation. The warm leg is
+        still worth keeping here as a shape check: pd.read_parquet can hand
+        back plain object or an Arrow-backed string dtype depending on the
+        pandas/pyarrow pair, so a cold-only test would miss a regression
+        that only shows up on a cache hit. The second call must actually be
+        a cache hit -- checked via mock_get_request.call_count -- or the
+        warm leg is worthless, since it would just be exercising the cold
+        path twice."""
+        ref = FlowRef("WEO", "9.0.0")
+        response = _MockResponse(
+            text="COUNTRY,INDICATOR,FREQUENCY,BASE_YEAR\nUSA,NGDP_RPCH,A,1990\n"
+        )
+
+        with patch(
+            "imf_reader.weo.api.make_get_request", return_value=response
+        ) as mock_get_request:
+            if warm:
+                api._series_metadata_for_ref(ref)  # populates the cache
+            result = api._series_metadata_for_ref(ref)
+
+        if warm:
+            assert mock_get_request.call_count == 1
+
+        assert all(dtype == "string" for dtype in result.dtypes)
+        assert result.iloc[0]["BASE_YEAR"] == "1990"
+
+    def test_duplicated_join_key_raises(self, monkeypatch):
+        """This frame *is* the caller's request in full, unlike
+        _join_series_metadata
+        (TestJoinSeriesMetadata.test_duplicated_sidecar_key_drops_sidecar_entirely),
+        which drops a duplicated sidecar and degrades to null columns
+        because the caller still keeps their observations either way: a
+        duplicated key here has nothing left to fall back to, and the frame
+        is about to be merged onto the caller's own observations, where a
+        duplicated key would fabricate rows silently. So this raises instead
+        of degrading."""
+        meta = _widened_sidecar_frame(
+            [
+                {"COUNTRY": "USA", "INDICATOR": "NGDP_RPCH"},
+                {"COUNTRY": "USA", "INDICATOR": "NGDP_RPCH"},
+            ]
+        )
+        monkeypatch.setattr(api, "_fetch_series_metadata", lambda ref: meta)
+
+        with pytest.raises(ValueError, match="duplicated"):
+            api._series_metadata_for_ref(FlowRef("WEO", "9.0.0"))
+
+    def test_propagates_fetch_failure_instead_of_degrading(self, monkeypatch):
+        """This frame is the entire product, unlike _join_series_metadata,
+        which degrades to null columns on a sidecar failure: there is
+        nothing left to hand back, so a fetch failure must propagate
+        unwrapped."""
+
+        def _raise(ref):
+            raise ConnectionError("sidecar unreachable")
+
+        monkeypatch.setattr(api, "_fetch_series_metadata", _raise)
+
+        with pytest.raises(ConnectionError, match="sidecar unreachable"):
+            api._series_metadata_for_ref(FlowRef("WEO", "9.0.0"))
+
+
+class TestGetSeriesMetadata:
+    """get_series_metadata mirrors get_weo_data's resolution: version=None
+    resolves against the API's own dataflow mapping alone, never
+    get_weo_versions()'s SDMX-inclusive union, since the SDMX bulk archive
+    has no series metadata endpoint at all."""
+
+    @patch("imf_reader.weo.api._series_metadata_for_ref")
+    @patch("imf_reader.weo.api._fetch_flow_mapping")
+    def test_none_resolves_within_api_mapping_only(
+        self, mock_mapping, mock_series_metadata_for_ref
+    ):
+        # October 2024 and every other SDMX-only release is newer-looking to
+        # nothing here, but if get_weo_versions()'s union ever leaked in, an
+        # SDMX release the API cannot serve could be picked as "latest".
+        mock_mapping.return_value = {("April", 2025): FlowRef("WEO", "6.0.0")}
+        mock_series_metadata_for_ref.return_value = pd.DataFrame()
+
+        api.get_series_metadata(version=None)
+
+        mock_series_metadata_for_ref.assert_called_once_with(FlowRef("WEO", "6.0.0"))
+
+    @patch("imf_reader.weo.api._fetch_flow_mapping")
+    def test_unavailable_version_raises_naming_the_boundary(self, mock_mapping):
+        """April 2020 predates the API's own coverage, and the bulk archive
+        has no series-metadata endpoint at all to fall back to, so this must
+        raise rather than degrade. The message must list the versions the
+        API actually carries -- derived from ``mapping``, never a hardcoded
+        boundary, since the set of API-served releases changes every six
+        months -- and must not point at get_weo_versions(): that function's
+        SDMX-inclusive union mostly raises this very error for series
+        metadata, so following it leads back to the same failure."""
+        mock_mapping.return_value = {("October", 2025): FlowRef("WEO", "9.0.0")}
+
+        with pytest.raises(VersionNotAvailableError) as exc_info:
+            api.get_series_metadata(("April", 2020))
+
+        message = str(exc_info.value)
+        assert "October" in message and "2025" in message
+        assert "get_weo_versions" not in message
+
+
+class TestOutputColumnsUnaffectedBySeriesMetadataFeature:
+    """Tripwire: fetch_data's default frame must stay 16 columns wide.
+    Series metadata is opt-in through get_series_metadata/
+    fetch_series_metadata and must never widen fetch_data's own output."""
+
+    def test_output_columns_count_unchanged(self):
+        assert len(api.OUTPUT_COLUMNS) == 16
 
 
 class TestOutputColumnsAppended:

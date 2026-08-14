@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Three new functions read series-level metadata for a WEO release, one row per series, keyed on
+  `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`. `weo.fetch_series_metadata(version=None)`
+  returns 41 columns against the April 2026 release, 8,200 rows, every column typed `string`.
+  `weo.fetch_data_with_metadata(version=None)` returns `fetch_data`'s observations left-merged
+  with that metadata, 54 columns, and resolves both halves to the same release by construction, so
+  the two can't silently drift apart the way two separate `version=None` calls could.
+  `weo.api.get_series_metadata(version=None)` is the api-layer equivalent of
+  `fetch_series_metadata`. `fetch_data`'s existing 16 columns are unchanged. All three are purely
+  additive.
+- Series metadata is served only for releases the API itself carries (April 2025 onward). A
+  version the API can't serve raises `VersionNotAvailableError` rather than returning null columns,
+  unlike `fetch_data`'s metadata sidecar, which degrades to null and logs a warning on a failed
+  request.
+- This closes the gap the "Known gotchas" fiscal-year entry named in v2.1.0.
+  `START_END_MONTHS_OF_REPORTING_YEAR`, and the raw `LATEST_ACTUAL_ANNUAL_DATA` with its
+  fiscal-year forms such as `FY2023/24` intact, are now both readable from
+  `weo.fetch_series_metadata()`, recovering the distinction `LASTACTUALDATE` collapses away. See
+  [World Economic Outlook](https://docs.one.org/tools/imf-reader/weo/#series-metadata).
+
 ## v2.1.0 (2026-08-14)
 
 - **Raised the `pyarrow` floor to `pyarrow>=16.0`.** pyarrow 14 was built against numpy 1.x and
