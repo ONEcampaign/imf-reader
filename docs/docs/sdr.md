@@ -2,7 +2,7 @@
 
 The Special Drawing Rights (SDR) is an international reserve asset the IMF created in 1969, exchangeable for usable currencies. Read more in the IMF's [SDR factsheet](https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr).
 
-The IMF publishes no API for SDR data. The `sdr` module works by parsing pages on the IMF website, so it is sensitive to the IMF restructuring those pages.
+The IMF publishes no API for the daily SDR valuation or the weekly interest rate; those two are web-only. Allocations and holdings do exist on the IMF's API, at monthly frequency (`IMF.STA:FA`), but this package has not moved to it. The `sdr` module works by parsing pages on the IMF website for all four series, so it is sensitive to the IMF restructuring those pages.
 
 ## Holdings and allocations
 

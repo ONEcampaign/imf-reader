@@ -132,7 +132,14 @@ def _resolve_sdmx_url(month: str, year: int) -> str:
             response.raise_for_status()
 
     tried = "\n".join(candidates)
-    raise NoDataError(f"No SDMX data found for {month} {year}. Tried:\n{tried}")
+    # An explicit version that can't be served raises instead of falling back
+    # to a different release, so this message is the only thing telling the
+    # caller what to ask for instead.
+    raise NoDataError(
+        f"No SDMX data found for {month} {year}. "
+        f"Call imf_reader.weo.get_weo_versions() for the releases this package can serve. "
+        f"Tried:\n{tried}"
+    )
 
 
 def _corrupt_release_note(month: str, year: int) -> str | None:

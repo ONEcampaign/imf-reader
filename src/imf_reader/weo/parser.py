@@ -130,6 +130,14 @@ class SDMXParser:
         """
 
         for column, dtype in SDMX_NUMERIC_COLUMNS.items():
+            if column == "OBS_VALUE":
+                below_precision = int((df[column] == "--").sum())
+                if below_precision:
+                    logger.debug(
+                        "Dropped %d observations published as '--' (below display precision); "
+                        "the API path does not carry these cells either",
+                        below_precision,
+                    )
             df[column] = df[column].str.replace(",", "")  # Remove commas
             df[column] = pd.to_numeric(
                 df[column], errors="coerce"

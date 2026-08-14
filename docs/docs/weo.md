@@ -14,7 +14,7 @@ df.shape
 **Output:**
 
 ```
-(361733, 15)
+(361733, 16)
 ```
 
 ```python
@@ -24,10 +24,10 @@ df.head(3)
 **Output:**
 
 ```
-  UNIT_CODE CONCEPT_CODE REF_AREA_CODE  REF_AREA_IMF_CODE FREQ_CODE  LASTACTUALDATE  SCALE_CODE NOTES  TIME_PERIOD  OBS_VALUE UNIT_LABEL                                           CONCEPT_LABEL                     REF_AREA_LABEL FREQ_LABEL SCALE_LABEL
-0       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         1999  -0.435363  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
-1       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         2000   0.212542  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
-2       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         2001   0.310076  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
+  UNIT_CODE CONCEPT_CODE REF_AREA_CODE  REF_AREA_IMF_CODE FREQ_CODE  LASTACTUALDATE  SCALE_CODE NOTES  TIME_PERIOD  OBS_VALUE UNIT_LABEL                                           CONCEPT_LABEL                     REF_AREA_LABEL FREQ_LABEL SCALE_LABEL COUNTRY_UPDATE_DATE
+0       USD          BCA           ABW                314         A            2024  1000000000  <NA>         1999  -0.435363  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
+1       USD          BCA           ABW                314         A            2024  1000000000  <NA>         2000   0.212542  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
+2       USD          BCA           ABW                314         A            2024  1000000000  <NA>         2001   0.310076  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
 ```
 
 ## Fetch a specific release
@@ -51,7 +51,7 @@ weo.get_weo_versions()
 **Output:**
 
 ```
-[('October', 2025), ('April', 2025), ('October', 2024), ('April', 2024), ('April', 2023), ('October', 2022), ('April', 2022), ('October', 2021), ('October', 2020), ('April', 2020), ('October', 2019), ('April', 2019)]
+[('April', 2026), ('October', 2025), ('April', 2025), ('October', 2024), ('April', 2024), ('April', 2023), ('October', 2022), ('April', 2022), ('October', 2021), ('October', 2020), ('April', 2020), ('October', 2019), ('April', 2019)]
 ```
 
 `('April', 2021)` and `('October', 2023)` are absent. Both are corrupt in the IMF's own published archive, so this package can't serve them. See [WEO coverage and known issues](weo-coverage.md) for what that means and how it surfaces.
@@ -70,14 +70,18 @@ weo.fetch_data.last_version_fetched
 **Output:**
 
 ```
-('October', 2025)
+('April', 2026)
 ```
 
 !!! warning "Heads up"
-    If the release you requested has no data yet, `fetch_data` rolls back to the previous one
-    (October rolls back to April of the same year, April rolls back to October of the previous
-    year) and logs the rollback at INFO. The version you asked for and the version you got can
-    differ. Check `last_version_fetched` when the exact release matters.
+
+    If the release you asked for has no data yet, `fetch_data()` rolls back: for `version=None`
+    ("latest"), it walks `get_weo_versions()` newest-first and tries up to 3 older releases,
+    logging each attempt at WARNING. An explicit version (e.g. `fetch_data(("October", 2025))`)
+    never rolls back — if it can't be served, `fetch_data` raises instead of returning a
+    different release under your requested label. The version you asked for and the version you
+    got can differ only for `version=None`; check `last_version_fetched` when the exact release
+    matters.
 
 ## Filter the frame
 
@@ -133,25 +137,26 @@ The October 2025 release covers 145 concepts across 210 areas, with `TIME_PERIOD
 
 ## Columns
 
-The 15 columns below are identical in name, order, and meaning on both source paths (the API and the bulk archive).
+The 16 columns below are identical in name, order, and meaning on both source paths (the API and the bulk archive).
 
-| Column              | dtype   | What it holds                                                               |
-| ------------------- | ------- | --------------------------------------------------------------------------- |
-| `UNIT_CODE`         | string  | Unit code, e.g. `USD`                                                       |
-| `CONCEPT_CODE`      | string  | Indicator code, e.g. `NGDP_RPCH`                                            |
-| `REF_AREA_CODE`     | string  | ISO3 (`NGA`) or `G`-prefixed aggregate (`G001`)                             |
-| `REF_AREA_IMF_CODE` | Int64   | Legacy numeric IMF area code. Null where none exists. Removed in 3.0        |
-| `FREQ_CODE`         | string  | Frequency code, e.g. `A`                                                    |
-| `LASTACTUALDATE`    | Int64   | Last year of actual (non-forecast) data. Only populated before October 2025 |
-| `SCALE_CODE`        | Int64   | Multiplier, e.g. `1000000000`                                               |
-| `NOTES`             | string  | Observation notes. Only populated before October 2025                       |
-| `TIME_PERIOD`       | Int64   | Year                                                                        |
-| `OBS_VALUE`         | Float64 | The value, expressed in `SCALE_CODE` units                                  |
-| `UNIT_LABEL`        | string  | e.g. `US dollar`                                                            |
-| `CONCEPT_LABEL`     | string  | e.g. `Current account balance (credit less debit), US dollar`               |
-| `REF_AREA_LABEL`    | string  | e.g. `Nigeria`                                                              |
-| `FREQ_LABEL`        | string  | e.g. `Annual`                                                               |
-| `SCALE_LABEL`       | string  | `Units`, `Millions`, or `Billions`                                          |
+| Column                | dtype          | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UNIT_CODE`           | string         | Unit code, e.g. `USD`                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `CONCEPT_CODE`        | string         | Indicator code, e.g. `NGDP_RPCH`                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `REF_AREA_CODE`       | string         | ISO3 (`NGA`) or `G`-prefixed aggregate (`G001`)                                                                                                                                                                                                                                                                                                                                                                                        |
+| `REF_AREA_IMF_CODE`   | Int64          | Legacy numeric IMF area code. Null where none exists. Removed in 3.0                                                                                                                                                                                                                                                                                                                                                                   |
+| `FREQ_CODE`           | string         | Frequency code, e.g. `A`                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `LASTACTUALDATE`      | Int64          | Last year of actual (non-forecast) data. From `LATEST_ACTUAL_ANNUAL_DATA` on the API path (fiscal-year forms like `FY2023/24` are collapsed to their leading year, `2023` — a one-way, lossy mapping that discards the fiscal-year distinction; read `START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API directly if you need it back — this package does not expose it), the XML series attribute of the same name on the bulk path |
+| `SCALE_CODE`          | Int64          | Multiplier, e.g. `1000000000`                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `NOTES`               | string         | Observation notes. From `METHODOLOGY_NOTES` on the API path, the XML series attribute of the same name on the bulk path — different free text between the two paths, and no column marks which one a given row came from; split on the release version you requested if that matters                                                                                                                                                   |
+| `TIME_PERIOD`         | Int64          | Year                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `OBS_VALUE`           | Float64        | The value, expressed in `SCALE_CODE` units                                                                                                                                                                                                                                                                                                                                                                                             |
+| `UNIT_LABEL`          | string         | e.g. `US dollar`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `CONCEPT_LABEL`       | string         | e.g. `Current account balance (credit less debit), US dollar`                                                                                                                                                                                                                                                                                                                                                                          |
+| `REF_AREA_LABEL`      | string         | e.g. `Nigeria`                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `FREQ_LABEL`          | string         | e.g. `Annual`                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `SCALE_LABEL`         | string         | `Units`, `Millions`, or `Billions`                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `COUNTRY_UPDATE_DATE` | datetime64[us] | Date the country's data was last revised. From the API path's metadata sidecar; always null on the bulk path (no per-country revision date in the XML)                                                                                                                                                                                                                                                                                 |
 
 See [WEO coverage and known issues](weo-coverage.md) for where these columns have gaps or quirks.
 

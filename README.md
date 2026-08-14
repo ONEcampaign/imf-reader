@@ -13,8 +13,10 @@ tidy pandas DataFrames.
 
 WEO data comes from the IMF's SDMX API for releases from April 2025 onward and from a
 discontinued bulk SDMX archive for everything before it, translated onto one vocabulary so
-columns and codes match across both sources. SDR data has no API, so imf-reader parses it
-from IMF web pages. Both sources make the package sensitive to changes in the IMF's site
+columns and codes match across both sources. SDR daily valuation and weekly interest rates
+have no API, so imf-reader parses them from IMF web pages. SDR allocations and holdings do
+exist on the API at monthly frequency, but this package has not moved to it and still parses
+them from web pages too. Both sources make the package sensitive to changes in the IMF's site
 structure or file formats. Please report any issues you encounter.
 
 ## Installation

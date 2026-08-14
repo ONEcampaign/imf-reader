@@ -9,7 +9,7 @@ from zipfile import ZipFile
 import pandas as pd
 import pytest
 
-from imf_reader.config import NoDataError
+from imf_reader.config import NoDataError, VersionNotAvailableError
 from imf_reader.weo import reader
 from imf_reader.weo import translate as translate_module
 from imf_reader.weo.api import OUTPUT_COLUMNS
@@ -127,20 +127,6 @@ def test_gen_latest_version(mock_datetime):
     assert reader.gen_latest_version() == ("October", 2023)
 
 
-def test_roll_back_version():
-    """Test for roll_back_version function."""
-
-    # Test that the function correctly rolls back from April to the previous October
-    assert reader.roll_back_version(("April", 2024)) == ("October", 2023)
-
-    # Test that the function correctly rolls back from October to April of the same year
-    assert reader.roll_back_version(("October", 2024)) == ("April", 2024)
-
-    # Test that the function raises a ValueError for an invalid month
-    with pytest.raises(ValueError):
-        reader.roll_back_version(("March", 2024))
-
-
 @patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data(mock_get_weo_data, mock_get_weo_versions):
@@ -181,19 +167,21 @@ def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
 
 
 @patch("imf_reader.weo.reader._fetch")
-@patch("imf_reader.weo.reader.roll_back_version")
 @patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data_handles_no_data_error(
-    mock_get_weo_data, mock_get_weo_versions, mock_roll_back_version, mock_fetch
+def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
+    mock_get_weo_data, mock_get_weo_versions, mock_fetch
 ):
-    """Test for fetch_data method when the API fails and falls back to scraper with rollback"""
+    """When version=None and both the API and the bulk scraper fail for the
+    resolved 'latest' version, fetch_data must walk get_weo_versions() --
+    an already-published, newest-first list -- rather than guess a previous
+    release from the calendar, and land on the next version that works."""
 
     # Mock get_weo_versions to return a specific version list
     mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
-    # Mock get_weo_data to raise ValueError (version not in API)
-    mock_get_weo_data.side_effect = ValueError("Version not available")
+    # Mock get_weo_data to raise VersionNotAvailableError (version not in API)
+    mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
 
     # Mock the _fetch function to raise a NoDataError for the first call and return a DataFrame for the second call
     mock_fetch.side_effect = [
@@ -201,20 +189,20 @@ def test_fetch_data_handles_no_data_error(
         pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]}),
     ]
 
-    # Mock the roll_back_version function to return a specific version
-    mock_roll_back_version.return_value = ("October", 2023)
-
     # Call the fetch_data function without passing a version
     df = reader.fetch_data()
 
     # Check that get_weo_versions was called to get latest version
     mock_get_weo_versions.assert_called()
 
-    # Check that _fetch was called twice (once for the initial call and once after the NoDataError)
+    # Check that _fetch was called twice (once for the initial call and once
+    # after rolling back to the next entry in get_weo_versions())
     assert mock_fetch.call_count == 2
+    mock_fetch.assert_any_call(("April", 2024))
+    mock_fetch.assert_any_call(("October", 2023))
 
-    # Check that roll_back_version was called once with the latest version
-    mock_roll_back_version.assert_called_once_with(("April", 2024))
+    # The rolled-back version is what fetch_data actually served.
+    assert reader.fetch_data.last_version_fetched == ("October", 2023)
 
     # Check that the DataFrame returned by fetch_data is as expected
     pd.testing.assert_frame_equal(
@@ -222,41 +210,53 @@ def test_fetch_data_handles_no_data_error(
     )
 
 
-@patch("imf_reader.weo.reader.to_api_vocabulary")
-@patch("imf_reader.weo.reader.SDMXParser")
 @patch.object(SDMXScraper, "scrape")
-@patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data_rolls_back_on_resolver_no_data_error(
-    mock_get_weo_data,
-    mock_get_weo_versions,
-    mock_scrape,
-    mock_parser,
-    mock_to_api_vocabulary,
-    cache_disabled,
+def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
+    mock_get_weo_data, mock_scrape, cache_disabled
 ):
-    """A genuinely unpublished release -- every candidate URL 404s, so
-    ``_resolve_sdmx_url`` raises NoDataError -- must still trigger the rollback to
-    the previous version. This is the counterpart to the 403 case (finding 1),
-    which must NOT roll back, and guards against that fix over-correcting into
-    swallowing every scrape failure as "not a rollback trigger"."""
+    """An explicit version that neither the API nor the bulk scraper can serve
+    must raise, never quietly roll back and return a different release under
+    the caller's requested label. Roll-back is only for an unresolved
+    version=None request."""
 
-    mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
-    mock_get_weo_data.side_effect = ValueError("Version not available")
+    mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
+    mock_scrape.side_effect = NoDataError("no data")
 
-    expected = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
-    mock_to_api_vocabulary.return_value = expected
+    with pytest.raises(NoDataError):
+        reader.fetch_data(("April", 2024))
 
-    # SDMXScraper.scrape is what reader._fetch calls; raising NoDataError on the
-    # first (April 2024) call mirrors what _resolve_sdmx_url raises when every
-    # candidate 404s. The second call (October 2023, after rollback) succeeds.
-    mock_scrape.side_effect = [NoDataError("no data"), object()]
+    mock_scrape.assert_called_once_with("April", 2024)
 
-    df = reader.fetch_data(("April", 2024))
 
-    assert mock_scrape.call_count == 2
-    mock_scrape.assert_any_call("April", 2024)
-    mock_scrape.assert_any_call("October", 2023)
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data_explicit_version_propagates_non_version_error(mock_get_weo_data):
+    """A failure inside the API path that is not VersionNotAvailableError --
+    a pandas parse error, an _align_schema bug, a codelist problem -- must
+    surface as-is, never be mistaken for 'this version isn't served' and
+    silently rerouted to the bulk scraper or another release."""
+
+    mock_get_weo_data.side_effect = ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        reader.fetch_data(("October", 2025))
+
+
+@patch("imf_reader.weo.reader._fetch")
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data_explicit_bulk_only_version_reaches_fetch(
+    mock_get_weo_data, mock_fetch
+):
+    """April 2020 predates the API; a VersionNotAvailableError from
+    get_weo_data must still fall through to the bulk scraper path."""
+
+    mock_get_weo_data.side_effect = VersionNotAvailableError("not in API")
+    expected = pd.DataFrame({"column1": [1], "column2": [2]})
+    mock_fetch.return_value = expected
+
+    df = reader.fetch_data(("April", 2020))
+
+    mock_fetch.assert_called_once_with(("April", 2020))
     pd.testing.assert_frame_equal(df, expected)
 
 

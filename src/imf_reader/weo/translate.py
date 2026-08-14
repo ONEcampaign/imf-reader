@@ -62,6 +62,15 @@ def to_api_vocabulary(df: pd.DataFrame) -> pd.DataFrame:
     df["UNIT_LABEL"] = df["UNIT_CODE"].map(unit_labels).astype("string")
     df["CONCEPT_LABEL"] = df["CONCEPT_CODE"].map(indicator_labels).astype("string")
 
+    # The bulk XML's series attributes are exactly UNIT, CONCEPT, REF_AREA,
+    # FREQ, LASTACTUALDATE, SCALE, NOTES -- there is no per-country revision
+    # date to carry, so this column is always null on the bulk path. dtype is
+    # pinned to datetime64[us] (not left to pandas' inferred default) so it
+    # stays byte-identical to the API path's parsed COUNTRY_UPDATE_DATE column.
+    df["COUNTRY_UPDATE_DATE"] = pd.Series(
+        pd.NaT, index=df.index, dtype="datetime64[us]"
+    )
+
     return df[OUTPUT_COLUMNS]
 
 
