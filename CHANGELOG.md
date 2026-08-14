@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- **Raised the `pandas` and `pyarrow` floors to `pandas>=3.0.0` and `pyarrow>=16.0`.** The previous
+  floors (`pandas>=2.2.2`, `pyarrow>=14.0`) did not work: installing at them fails 12 tests. pyarrow
+  14 was built against numpy 1.x and cannot import alongside numpy 2 at all, which made every
+  parquet cache write fail silently and turned the disk cache into a no-op. Nothing that worked
+  before stops working — the old floors resolved to an installation that was already broken — but
+  the declared range is narrower, so this warrants a version bump rather than a patch release.
+  A new CI job installs at `--resolution lowest-direct` so the floors stay a tested claim.
+- Fixed a latent crash in `utils._raise_connection_error`, which read `.status_code` off
+  `HTTPError.response` without checking it for `None`.
+- `weo.gen_latest_version()` now takes a single UTC reading of the clock instead of two local ones.
+  The old form could pair a year with the next year's month if the two calls straddled midnight on
+  31 December, and its answer depended on the caller's timezone.
+- Security: refreshed the lockfile, clearing advisories in `soupsieve` (2.8.3 → 2.9.2),
+  `urllib3` (2.6.3 → 2.7.0) and `idna` (3.13 → 3.18).
+- The package now ships a `py.typed` marker, so downstream type checkers see its annotations
+  instead of silently ignoring them.
+- Removed the Codecov integration.
+
 ## v2.0.1 (2026-08-13)
 
 - Removed the `readerkit<0.2` upper bound. `readerkit` is a sibling package released in step with

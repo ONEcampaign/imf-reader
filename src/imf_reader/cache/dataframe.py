@@ -79,7 +79,16 @@ def dataframe_cache(
             if path.suffix == ".parquet":
                 return pd.read_parquet(path)
             with path.open("rb") as f:
-                return pickle.load(f)
+                # S301: unpickling executes arbitrary code, so this is only as
+                # trustworthy as the cache directory. Every .pkl here was
+                # written by _write below, under a root owned by the running
+                # user; an attacker able to plant a file there can already run
+                # code as that user by easier routes. JSON would remove the
+                # primitive outright, but _fetch_version_mapping caches a dict
+                # keyed by (month, year) tuples, which JSON cannot round-trip
+                # without a custom encoding — so that swap is a deliberate
+                # change, not a drop-in.
+                return pickle.load(f)  # noqa: S301
 
         def _write(path: Path, result: Any) -> None:
             path.parent.mkdir(parents=True, exist_ok=True)

@@ -14,7 +14,10 @@ def _raise_connection_error(url: str, exc: Exception) -> NoReturn:
 
     Always raises; return type Never so callers' control flow is understood.
     """
-    if isinstance(exc, requests.HTTPError):
+    # HTTPError.response is Optional: an error raised outside a response cycle
+    # (or re-raised without one) carries None, so the status-code message is only
+    # reachable when a response is actually attached.
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
         raise ConnectionError(
             f"Could not connect to {url}. Status code: {exc.response.status_code}"
         ) from exc
