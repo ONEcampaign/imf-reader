@@ -6,7 +6,12 @@ import pandas as pd
 
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import _legacy_weo_clear_cache as clear_cache  # noqa: F401
-from imf_reader.config import NoDataError, VersionNotAvailableError, logger
+from imf_reader.config import (
+    DataflowDiscoveryError,
+    NoDataError,
+    VersionNotAvailableError,
+    logger,
+)
 from imf_reader.weo import Version
 from imf_reader.weo.api import get_weo_data, get_weo_versions
 from imf_reader.weo.parser import SDMXParser
@@ -141,17 +146,35 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
 
 def _fetch_data_for_version(version: Version) -> pd.DataFrame:
     """Fetch one version through the API, falling back to the bulk scraper
-    only when the API does not serve that version at all.
+    only when the API cannot serve that version at all.
 
-    ``VersionNotAvailableError`` (a ``NoDataError`` subclass) is the only
-    signal that means "try the bulk archive instead" -- every other failure
-    inside the API path (a parse bug, an ``_align_schema`` bug, a codelist
-    problem) must surface as-is rather than being mistaken for a missing
-    version and silently rerouted.
+    ``VersionNotAvailableError`` and ``DataflowDiscoveryError`` (both
+    ``NoDataError`` subclasses) are the only signals that mean "try the bulk
+    archive instead" -- every other failure inside the API path (a parse bug,
+    an ``_align_schema`` bug, a codelist problem) must surface as-is rather
+    than being mistaken for a missing version and silently rerouted.
+
+    An unusable dataflow catalogue (``DataflowDiscoveryError``) means the API
+    cannot serve *any* version, not just this one, but for an explicit
+    version the bulk archive is still the correct source: it returns the
+    requested release under its own correct label. An unresolved
+    ``version=None`` request never reaches this line, because ``fetch_data``
+    resolves "latest" through ``get_weo_versions()`` first, which raises the
+    same error and fails loudly rather than silently degrading to an
+    archive release mislabelled as latest -- that asymmetry is deliberate:
+    degrade to the archive when the label stays right, fail loudly when it
+    would not.
     """
     try:
         return get_weo_data(version)
-    except VersionNotAvailableError:
+    except (VersionNotAvailableError, DataflowDiscoveryError) as exc:
+        logger.warning(
+            "API path failed for %s %s (%s: %s); falling back to the bulk archive",
+            version[0],
+            version[1],
+            type(exc).__name__,
+            exc,
+        )
         return _fetch(version)
 
 

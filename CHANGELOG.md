@@ -19,7 +19,6 @@
 - The package now ships a `py.typed` marker, so downstream type checkers see its annotations
   instead of silently ignoring them.
 - Removed the Codecov integration.
-  \=======
 
 ### Corrected data
 
@@ -87,8 +86,18 @@
 - Bulk-archive observations published as `--` (below display precision, not zero) continue to be
   dropped rather than written as `0.0` or flagged with a status column; the count dropped is now
   logged at `debug`.
-
-> > > > > > > a0339d4 (feat(weo): resolve releases by PUBLICATION_DATE and restore metadata columns)
+- A dataflow catalogue that responds successfully but carries no usable WEO dataflow now raises
+  `DataflowDiscoveryError`. Previously that response produced an empty version mapping, which was
+  cached for an hour, and `fetch_data()` resolved "latest" against the bulk archive instead and
+  returned April 2025 under that label. An explicit version still falls back to the bulk archive,
+  which serves the requested release under its own correct label, and logs a warning saying so.
+- Series metadata and observations are cached independently. A failed sidecar request used to be
+  written into the 7-day observations cache, so `LASTACTUALDATE`, `NOTES` and `COUNTRY_UPDATE_DATE`
+  stayed null for a week and the warning fired only on the first call. The join now happens outside
+  that cache, so a failed sidecar costs only the call that hit it.
+- Removing an unreadable cache entry no longer fails the call. On a read-only or shared cache
+  directory the removal raised `PermissionError` out of the cache layer, so a recoverable cache
+  miss became a hard error. The failure is logged and the live fetch proceeds.
 
 ## v2.0.1 (2026-08-13)
 

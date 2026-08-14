@@ -9,7 +9,11 @@ from zipfile import ZipFile
 import pandas as pd
 import pytest
 
-from imf_reader.config import NoDataError, VersionNotAvailableError
+from imf_reader.config import (
+    DataflowDiscoveryError,
+    NoDataError,
+    VersionNotAvailableError,
+)
 from imf_reader.weo import reader
 from imf_reader.weo import translate as translate_module
 from imf_reader.weo.api import OUTPUT_COLUMNS
@@ -258,6 +262,67 @@ def test_fetch_data_explicit_bulk_only_version_reaches_fetch(
 
     mock_fetch.assert_called_once_with(("April", 2020))
     pd.testing.assert_frame_equal(df, expected)
+
+
+@patch("imf_reader.weo.reader._fetch")
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
+    mock_get_weo_data, mock_fetch
+):
+    """An unusable dataflow catalogue means the API cannot serve *any*
+    version, but for an explicit version the bulk archive is still the
+    correct source: it returns the requested release under its own correct
+    label, so DataflowDiscoveryError must fall back exactly like
+    VersionNotAvailableError does."""
+
+    mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
+    expected = pd.DataFrame({"column1": [1], "column2": [2]})
+    mock_fetch.return_value = expected
+
+    df = reader.fetch_data(("April", 2020))
+
+    mock_fetch.assert_called_once_with(("April", 2020))
+    pd.testing.assert_frame_equal(df, expected)
+
+
+@patch("imf_reader.weo.reader._fetch")
+@patch("imf_reader.weo.reader.get_weo_data")
+def test_fetch_data_explicit_version_fallback_logs_a_warning(
+    mock_get_weo_data, mock_fetch, caplog
+):
+    """The catalogue-unusable fallback degrades silently in its return value
+    (the label stays correct), but must still carry a signal above INFO:
+    without a warning, a broken catalogue schema would reroute every
+    explicit-version call in a process with nothing to show for it."""
+
+    mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
+    mock_fetch.return_value = pd.DataFrame({"column1": [1], "column2": [2]})
+
+    with caplog.at_level("WARNING", logger="imf_reader"):
+        reader.fetch_data(("April", 2020))
+
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert "April" in message
+    assert "2020" in message
+    assert "DataflowDiscoveryError" in message
+    assert "catalogue unusable" in message
+
+
+@patch("imf_reader.weo.reader.get_weo_versions")
+def test_fetch_data_none_propagates_discovery_error_instead_of_archive_fallback(
+    mock_get_weo_versions,
+):
+    """An unresolved version=None request must never reach the bulk-archive
+    fallback when the catalogue is unusable: get_weo_versions() (which
+    fetch_data consults first to resolve 'latest') raises the same error, so
+    fetch_data fails loudly instead of silently serving an archive release
+    mislabelled as latest."""
+
+    mock_get_weo_versions.side_effect = DataflowDiscoveryError("catalogue unusable")
+
+    with pytest.raises(DataflowDiscoveryError):
+        reader.fetch_data()
 
 
 @patch.object(translate_module, "_fetch_codelist")

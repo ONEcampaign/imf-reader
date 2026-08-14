@@ -16,6 +16,13 @@ class VersionNotAvailableError(NoDataError):
     pass
 
 
+class DataflowDiscoveryError(NoDataError):
+    """The IMF's dataflow catalogue responded successfully but carried no
+    usable WEO dataflow, so no release can be resolved."""
+
+    pass
+
+
 class UnexpectedFileError(Exception):
     """This is a custom exception that is raised when an unexpected file is found in the zip folder
     or if there is an issue with the file structure"""

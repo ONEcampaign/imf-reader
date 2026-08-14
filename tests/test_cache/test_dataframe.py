@@ -242,6 +242,10 @@ def _raise_oserror(*_args: Any, **_kwargs: Any) -> None:
     raise OSError("disk full")
 
 
+def _raise_permission_error(*_args: Any, **_kwargs: Any) -> None:
+    raise PermissionError("denied")
+
+
 def test_unreadable_parquet_entry_is_a_miss_and_is_unlinked(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -422,6 +426,80 @@ def test_two_consecutive_read_failures_escalate(
     escalations = [m for m in messages if "has failed to read back" in m]
     assert len(escalations) == 1
     assert "test_df" in escalations[0]
+
+
+def test_unlink_failure_on_corrupt_entry_still_returns_live_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A corrupt entry whose removal raises PermissionError still yields a live result.
+
+    A read-only cache mount or a shared root this process doesn't own can
+    make an unreadable entry readable but not removable. That must not
+    prevent the decorated function from being called and its result
+    returned.
+    """
+    calls: list[int] = []
+    fn = _make_df_fn(calls)
+    fn(x=1)
+
+    cache_dir = cfg.get_active_root() / "test_df"
+    poisoned = next(cache_dir.iterdir())
+    poisoned.write_bytes(b"not a parquet file")
+
+    monkeypatch.setattr(Path, "unlink", _raise_permission_error)
+
+    result = fn(x=1)
+
+    assert len(calls) == 2, "Unreadable entry should still force a live re-fetch"
+    assert list(result["a"]) == [1]
+
+
+def test_unlink_failure_on_corrupt_entry_logs_a_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed removal of a corrupt entry is logged, not silently swallowed."""
+    calls: list[int] = []
+    fn = _make_df_fn(calls)
+    fn(x=1)
+
+    cache_dir = cfg.get_active_root() / "test_df"
+    poisoned = next(cache_dir.iterdir())
+    poisoned.write_bytes(b"not a parquet file")
+
+    monkeypatch.setattr(Path, "unlink", _raise_permission_error)
+
+    with caplog.at_level(logging.WARNING):
+        fn(x=1)
+
+    assert "Failed to remove unreadable cache entry" in caplog.text
+    assert "PermissionError" in caplog.text
+
+
+def test_unlink_success_on_corrupt_entry_removes_the_file(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Normal-path regression guard: a removable corrupt entry is still removed.
+
+    The refetch's own write is also forced to fail here so the poisoned
+    file's absence can be checked directly, instead of being masked by a
+    fresh, valid file landing back at the same path.
+    """
+    calls: list[int] = []
+    fn = _make_df_fn(calls)
+    fn(x=1)
+
+    cache_dir = cfg.get_active_root() / "test_df"
+    poisoned = next(cache_dir.iterdir())
+    poisoned.write_bytes(b"not a parquet file")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", _raise_oserror)
+
+    with caplog.at_level(logging.WARNING):
+        fn(x=1)
+
+    assert len(calls) == 2
+    assert not poisoned.exists()
+    assert "Failed to remove unreadable cache entry" not in caplog.text
 
 
 def test_successful_read_resets_read_failure_counter(

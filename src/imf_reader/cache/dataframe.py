@@ -100,7 +100,7 @@ def dataframe_cache(
                 # an attacker able to plant a file there can already run code as
                 # that user by easier routes. JSON would remove the primitive
                 # outright, at the cost of a custom encoding for
-                # _fetch_version_mapping, which caches a dict keyed by
+                # _fetch_flow_mapping, which caches a dict keyed by
                 # (month, year) tuples that JSON cannot round-trip.
                 return pickle.load(f)  # noqa: S301
 
@@ -139,7 +139,11 @@ def dataframe_cache(
                     # is treated as a miss, not an error. Unlinking it matters as
                     # much as the try: without it, every later call would re-read
                     # and re-fail against the same file, and only a manual
-                    # clear_cache() would recover.
+                    # clear_cache() would recover. The unlink itself is wrapped
+                    # below because a read-only cache mount or a shared root
+                    # this process doesn't own leaves the entry readable but not
+                    # removable, and PermissionError there is just as
+                    # recoverable as the read failure that got us here.
                     _read_failure_counts[key] = _read_failure_counts.get(key, 0) + 1
                     logger.warning(
                         "Ignoring unreadable cache entry %s: %s: %s",
@@ -165,7 +169,22 @@ def dataframe_cache(
                             _read_failure_counts[key],
                             key,
                         )
-                    cached.unlink(missing_ok=True)
+                    try:
+                        cached.unlink(missing_ok=True)
+                    except OSError as unlink_exc:
+                        # Left unhandled, this would abort the whole call on a
+                        # directory this process can't write to, even though
+                        # the entry was still readable. Suppressing it here is
+                        # safe, not sloppy: the live call below still runs,
+                        # and its own write into the same directory will hit
+                        # the same non-writable path, which the write-side
+                        # except above already handles, escalation included.
+                        logger.warning(
+                            "Failed to remove unreadable cache entry %s: %s: %s",
+                            cached,
+                            type(unlink_exc).__name__,
+                            unlink_exc,
+                        )
                     # falls through to the live call below
                 else:
                     _read_failure_counts.pop(key, None)
