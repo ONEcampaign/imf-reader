@@ -119,26 +119,26 @@ def test_gen_latest_version(mock_datetime):
 
 
 @patch("imf_reader.weo.reader.get_weo_versions")
-@patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data(mock_get_weo_data, mock_get_weo_versions):
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
+def test_fetch_data(mock_get_weo_data_with_ref, mock_get_weo_versions):
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
-    mock_get_weo_data.return_value = mock_data
+    mock_get_weo_data_with_ref.return_value = (mock_data, FlowRef("WEO", "9.0.0"))
     mock_get_weo_versions.return_value = [("October", 2025), ("April", 2025)]
 
     pd.testing.assert_frame_equal(reader.fetch_data(("April", 2024)), mock_data)
-    mock_get_weo_data.assert_called_with(("April", 2024))
+    mock_get_weo_data_with_ref.assert_called_with(("April", 2024))
 
-    mock_get_weo_data.reset_mock()
+    mock_get_weo_data_with_ref.reset_mock()
     reader.fetch_data()
     mock_get_weo_versions.assert_called()
-    mock_get_weo_data.assert_called_with(("October", 2025))
+    mock_get_weo_data_with_ref.assert_called_with(("October", 2025))
 
 
 @patch("imf_reader.weo.reader.get_weo_versions")
-@patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
+def test_fetch_data_attribute(mock_get_weo_data_with_ref, mock_get_weo_versions):
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
-    mock_get_weo_data.return_value = mock_data
+    mock_get_weo_data_with_ref.return_value = (mock_data, FlowRef("WEO", "9.0.0"))
     mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
     reader.fetch_data(("April", 2022))
@@ -150,9 +150,9 @@ def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
 
 @patch("imf_reader.weo.reader._fetch")
 @patch("imf_reader.weo.reader.get_weo_versions")
-@patch("imf_reader.weo.reader.get_weo_data")
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
-    mock_get_weo_data, mock_get_weo_versions, mock_fetch
+    mock_get_weo_data_with_ref, mock_get_weo_versions, mock_fetch
 ):
     """When version=None and both the API and the bulk scraper fail for the
     resolved 'latest' version, fetch_data must walk get_weo_versions() --
@@ -161,7 +161,9 @@ def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
 
     mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
-    mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
+    mock_get_weo_data_with_ref.side_effect = VersionNotAvailableError(
+        "Version not available"
+    )
 
     mock_fetch.side_effect = [
         NoDataError,
@@ -187,16 +189,18 @@ def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
 
 
 @patch.object(SDMXScraper, "scrape")
-@patch("imf_reader.weo.reader.get_weo_data")
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
-    mock_get_weo_data, mock_scrape, cache_disabled
+    mock_get_weo_data_with_ref, mock_scrape, cache_disabled
 ):
     """An explicit version that neither the API nor the bulk scraper can serve
     raises rather than falling back to a different release under the
     caller's requested label. Roll-back is only for an unresolved
     version=None request."""
 
-    mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
+    mock_get_weo_data_with_ref.side_effect = VersionNotAvailableError(
+        "Version not available"
+    )
     mock_scrape.side_effect = NoDataError("no data")
 
     with pytest.raises(NoDataError):
@@ -205,28 +209,30 @@ def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
     mock_scrape.assert_called_once_with("April", 2024)
 
 
-@patch("imf_reader.weo.reader.get_weo_data")
-def test_fetch_data_explicit_version_propagates_non_version_error(mock_get_weo_data):
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
+def test_fetch_data_explicit_version_propagates_non_version_error(
+    mock_get_weo_data_with_ref,
+):
     """Any API-path error other than VersionNotAvailableError -- a pandas
     parse error, an _align_schema bug, a codelist problem -- surfaces as-is,
     rather than being mistaken for 'this version isn't served' and rerouted
     to the bulk scraper or another release."""
 
-    mock_get_weo_data.side_effect = ValueError("boom")
+    mock_get_weo_data_with_ref.side_effect = ValueError("boom")
 
     with pytest.raises(ValueError, match="boom"):
         reader.fetch_data(("October", 2025))
 
 
 @patch("imf_reader.weo.reader._fetch")
-@patch("imf_reader.weo.reader.get_weo_data")
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_explicit_bulk_only_version_reaches_fetch(
-    mock_get_weo_data, mock_fetch
+    mock_get_weo_data_with_ref, mock_fetch
 ):
     """April 2020 predates the API; a VersionNotAvailableError from
-    get_weo_data must still fall through to the bulk scraper path."""
+    _get_weo_data_with_ref must still fall through to the bulk scraper path."""
 
-    mock_get_weo_data.side_effect = VersionNotAvailableError("not in API")
+    mock_get_weo_data_with_ref.side_effect = VersionNotAvailableError("not in API")
     expected = pd.DataFrame({"column1": [1], "column2": [2]})
     mock_fetch.return_value = expected
 
@@ -237,9 +243,9 @@ def test_fetch_data_explicit_bulk_only_version_reaches_fetch(
 
 
 @patch("imf_reader.weo.reader._fetch")
-@patch("imf_reader.weo.reader.get_weo_data")
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
-    mock_get_weo_data, mock_fetch
+    mock_get_weo_data_with_ref, mock_fetch
 ):
     """An unusable dataflow catalogue means the API cannot serve *any*
     version, but for an explicit version the bulk archive is still the
@@ -247,7 +253,9 @@ def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
     label, so DataflowDiscoveryError must fall back exactly like
     VersionNotAvailableError does."""
 
-    mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
+    mock_get_weo_data_with_ref.side_effect = DataflowDiscoveryError(
+        "catalogue unusable"
+    )
     expected = pd.DataFrame({"column1": [1], "column2": [2]})
     mock_fetch.return_value = expected
 
@@ -258,16 +266,18 @@ def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
 
 
 @patch("imf_reader.weo.reader._fetch")
-@patch("imf_reader.weo.reader.get_weo_data")
+@patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_explicit_version_fallback_logs_a_warning(
-    mock_get_weo_data, mock_fetch, caplog, monkeypatch
+    mock_get_weo_data_with_ref, mock_fetch, caplog, monkeypatch
 ):
     """The catalogue-unusable fallback keeps the caller's label correct, so its
     return value alone shows nothing. It must still carry a signal above INFO:
     a broken catalogue schema would otherwise reroute every explicit-version
     call in a process with nothing to show for it."""
 
-    mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
+    mock_get_weo_data_with_ref.side_effect = DataflowDiscoveryError(
+        "catalogue unusable"
+    )
     mock_fetch.return_value = pd.DataFrame({"column1": [1], "column2": [2]})
 
     # config.py turns propagation off on this logger so a caller configuring

@@ -335,7 +335,7 @@ _LATEST_ACTUAL_ANNUAL_DATA_RE = re.compile(r"^(?:FY(\d{4})/\d{2}|(\d{4}))$")
 # to code that expects the new one -- the version-scoped cache root does not
 # save this, since editable and git installs stay inside the same version
 # segment (see CHANGELOG.md).
-_SIDECAR_SCHEMA = "2"
+_SIDECAR_SCHEMA = "3"
 
 # Matches the SDMX-CSV writer's multi-value-delimiter marker on a header,
 # e.g. "TOPIC[]" or "STRUCTURE[;]". The marker names the writer's own
@@ -415,6 +415,19 @@ def _fetch_series_metadata(ref: FlowRef, schema: str = _SIDECAR_SCHEMA) -> pd.Da
     and those inferences move between releases and across the pandas support
     range.
 
+    NA recognition is also explicit rather than left to ``read_csv``'s
+    default: pandas' default NA-token list treats a literal ``N/A`` or
+    ``n/a`` cell -- values the IMF actually publishes, on
+    ``METHODOLOGY_NOTES`` and ``BASIS_OF_PROJECTIONS`` among others -- as
+    missing, indistinguishable from a genuinely empty cell. This frame is
+    meant to expose what the IMF publishes verbatim, so only a truly empty
+    cell (``keep_default_na=False, na_values=[""]``) is treated as missing
+    here; every other column stays free to carry whatever literal text the
+    sidecar sends, NA-like tokens included. A caller that wants "no note"
+    normalised to null -- e.g. ``fetch_data``'s ``NOTES`` column -- does that
+    normalisation itself, downstream of this function (see
+    ``_join_series_metadata`` and ``_NA_LIKE_TOKENS``).
+
     Results are cached for 7 days, matching the primary data fetch's TTL.
     Checking for a column a caller relies on (e.g.
     ``LATEST_ACTUAL_ANNUAL_DATA``) belongs to the callers that need those
@@ -433,9 +446,34 @@ def _fetch_series_metadata(ref: FlowRef, schema: str = _SIDECAR_SCHEMA) -> pd.Da
     response = make_get_request(
         url, headers={"Accept": "text/csv"}, use_http_cache=False
     )
-    df = pd.read_csv(StringIO(response.text), low_memory=False, dtype="string")
+    df = pd.read_csv(
+        StringIO(response.text),
+        low_memory=False,
+        dtype="string",
+        keep_default_na=False,
+        na_values=[""],
+    )
     df = df.rename(columns=_normalise_sidecar_columns(df.columns))
     return df.drop(columns=[c for c in _SIDECAR_ENVELOPE_COLUMNS if c in df.columns])
+
+
+# NA-like literal tokens the sidecar's free-text columns carry for "not
+# applicable", distinct from a genuinely empty cell -- see
+# _fetch_series_metadata's docstring for why its own read preserves these
+# as literal text rather than folding them into <NA> automatically. Matched
+# case-insensitively (see
+# _null_na_like_tokens): the live sidecar has been observed to emit both
+# "N/A" (METHODOLOGY_NOTES) and "n/a" (BASIS_OF_PROJECTIONS) for the same
+# meaning, and no sidecar column is known to use casing to carry information,
+# so folding case here catches any other casing variant (e.g. "N/a") without
+# hand-listing it.
+_NA_LIKE_TOKENS = frozenset({"N/A"})
+
+
+def _null_na_like_tokens(text: pd.Series) -> pd.Series:
+    """Null out cells matching _NA_LIKE_TOKENS (case-insensitively), leaving
+    already-null cells and everything else untouched."""
+    return text.mask(text.str.upper().isin(_NA_LIKE_TOKENS), pd.NA)
 
 
 def _parse_latest_actual_annual_data(raw: pd.Series) -> pd.Series:
@@ -444,9 +482,13 @@ def _parse_latest_actual_annual_data(raw: pd.Series) -> pd.Series:
     A fiscal-year form (``FY2023/24``) and a plain year (``2024``) both parse
     to the same integer, since the bulk XML's LASTACTUALDATE this column
     feeds has no FY forms at all -- collapsing the distinction is what makes
-    the two paths semantically identical. Anything else becomes <NA>.
+    the two paths semantically identical. Anything else becomes <NA>,
+    including an NA-like literal such as ``N/A``/``n/a`` (see
+    _NA_LIKE_TOKENS) -- normalised away before the unparsed-token check below
+    so a genuinely unrecognised token doesn't get lost in the noise of an
+    expected one.
     """
-    text = raw.astype("string")
+    text = _null_na_like_tokens(raw.astype("string"))
     extracted = text.str.extract(_LATEST_ACTUAL_ANNUAL_DATA_RE)
     year = extracted[0].fillna(extracted[1])
 
@@ -472,6 +514,11 @@ def _parse_country_update_date(raw: pd.Series) -> pd.Series:
     ``[us]``, but pinning it explicitly keeps this column byte-identical to
     the bulk path's all-null ``datetime64[us]`` column (``translate.py``)
     even if a future pandas release changes its default.
+
+    No explicit NA-like-token handling is needed here (unlike
+    ``_parse_latest_actual_annual_data``): ``errors="coerce"`` already turns
+    anything that doesn't match ``%m/%d/%Y`` -- an NA-like literal such as
+    ``N/A``/``n/a`` included -- into ``NaT``.
     """
     return pd.to_datetime(raw, format="%m/%d/%Y", errors="coerce").astype(
         "datetime64[us]"
@@ -583,9 +630,64 @@ def _join_series_metadata(df: pd.DataFrame, ref: FlowRef) -> pd.DataFrame:
     df["LASTACTUALDATE"] = _parse_latest_actual_annual_data(
         df.pop("LATEST_ACTUAL_ANNUAL_DATA")
     )
-    df["NOTES"] = df.pop("METHODOLOGY_NOTES").astype("string")
+    # NOTES normalises an NA-like literal (e.g. "N/A") to null same as a
+    # genuinely empty cell, unlike _fetch_series_metadata's own raw frame,
+    # which preserves it verbatim (see that function's docstring and
+    # _NA_LIKE_TOKENS): a caller filtering df[df.NOTES.notna()] must not get
+    # back a row whose "note" is the literal word for "no note".
+    df["NOTES"] = _null_na_like_tokens(df.pop("METHODOLOGY_NOTES").astype("string"))
     df["COUNTRY_UPDATE_DATE"] = _parse_country_update_date(df["COUNTRY_UPDATE_DATE"])
     return df
+
+
+def _rejoin_series_metadata_if_degraded(df: pd.DataFrame, ref: FlowRef) -> pd.DataFrame:
+    """Retry the series-metadata join once, if ``df`` carries
+    ``_with_null_metadata_columns``'s degrade signature: LASTACTUALDATE,
+    NOTES and COUNTRY_UPDATE_DATE all entirely null.
+
+    Exists for ``reader.fetch_data_with_metadata``, which reads the same
+    cached sidecar twice for one call -- once via ``get_weo_data`` while
+    building its observations frame, once via ``_series_metadata_for_ref``
+    for its own metadata frame. If the first read failed transiently and the
+    second succeeded, ``df`` would otherwise carry a populated
+    LATEST_ACTUAL_ANNUAL_DATA-derived metadata frame sitting beside its own
+    null LASTACTUALDATE, and a null COUNTRY_UPDATE_DATE with no counterpart
+    at all (it is excluded from the metadata frame, see
+    ``_SERIES_METADATA_EXCLUDED``) -- internally inconsistent data, not
+    merely missing data. The caller is expected to call this only after a
+    metadata fetch has already succeeded, since that is what proves the
+    sidecar cache is warm: the retry here is then a cache hit, not a second
+    HTTP round trip.
+
+    The all-null check is a sufficient-not-necessary signature for a
+    degrade: a legitimate merge that matched no rows at all produces the
+    same all-null shape. Re-running the join in that case is harmless --
+    the sidecar is cached, so it costs one cache hit and reproduces the same
+    (correctly empty) result -- so this does not try to tell the two cases
+    apart.
+
+    Retries at most once; never loops.
+    """
+    if not all(df[column].isna().all() for column in _SIDECAR_SUPPLIED_COLUMNS):
+        return df
+
+    original_columns = df.columns.tolist()
+    rejoined = _join_series_metadata(df.drop(columns=_SIDECAR_SUPPLIED_COLUMNS), ref)
+    # _join_series_metadata appends its three columns at the end; restoring
+    # the caller's original column order keeps this transparent to a caller
+    # that already reindexed (e.g. reader.fetch_data_with_metadata, whose
+    # observations frame is already OUTPUT_COLUMNS-ordered).
+    rejoined = rejoined[original_columns]
+
+    if not all(rejoined[column].isna().all() for column in _SIDECAR_SUPPLIED_COLUMNS):
+        logger.info(
+            "Series metadata for %s %s recovered on retry; LASTACTUALDATE, "
+            "NOTES and COUNTRY_UPDATE_DATE are now populated",
+            ref.dataflow_id,
+            ref.version,
+        )
+
+    return rejoined
 
 
 def _align_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -768,6 +870,36 @@ def _resolve_flow_ref(
     return version, mapping[version]
 
 
+def _get_weo_data_with_ref(
+    version: Version | None = None,
+) -> tuple[pd.DataFrame, FlowRef]:
+    """``get_weo_data``'s real body, also returning the FlowRef that served
+    the request.
+
+    Split out for ``reader._fetch_data_for_version``, which needs that ref
+    to pin ``fetch_data_with_metadata``'s series-metadata leg to the same
+    dataflow/version its observations leg resolved to -- re-resolving the
+    version a second time (the naive approach) risks landing on a different
+    FlowRef if the 1-hour flow-mapping cache expires between the two calls.
+
+    Args:
+        version: Version tuple (month, year) e.g. ("April", 2025). If None, uses latest.
+
+    Returns:
+        The (frame, ref) pair: frame carries every ``OUTPUT_COLUMNS`` entry,
+        ref is the FlowRef that served it.
+    """
+    version, ref = _resolve_flow_ref(version, purpose="observations")
+    # The observations cache (_get_weo_data_cached) and the series metadata
+    # sidecar (_join_series_metadata -> _fetch_series_metadata) are cached
+    # independently, joined here rather than inside the cached function, so a
+    # transient sidecar failure only ever costs this one call. See
+    # _get_weo_data_cached's docstring.
+    df = _get_weo_data_cached(version, ref)
+    df = _join_series_metadata(df, ref)
+    return df[OUTPUT_COLUMNS], ref
+
+
 def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     """Fetch WEO data for a specific version.
 
@@ -780,15 +912,8 @@ def get_weo_data(version: Version | None = None) -> pd.DataFrame:
     Returns:
         DataFrame with WEO data.
     """
-    version, ref = _resolve_flow_ref(version, purpose="observations")
-    # The observations cache (_get_weo_data_cached) and the series metadata
-    # sidecar (_join_series_metadata -> _fetch_series_metadata) are cached
-    # independently, joined here rather than inside the cached function, so a
-    # transient sidecar failure only ever costs this one call. See
-    # _get_weo_data_cached's docstring.
-    df = _get_weo_data_cached(version, ref)
-    df = _join_series_metadata(df, ref)
-    return df[OUTPUT_COLUMNS]
+    df, _ref = _get_weo_data_with_ref(version)
+    return df
 
 
 # Preserve the .cache_clear attribute on the public symbol (the

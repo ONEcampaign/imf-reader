@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.2.0 (2026-08-14)
 
 - Three new functions read series-level metadata for a WEO release, one row per series, keyed on
   `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`. `weo.fetch_series_metadata(version=None)`
@@ -20,6 +20,23 @@
   fiscal-year forms such as `FY2023/24` intact, are now both readable from
   `weo.fetch_series_metadata()`, recovering the distinction `LASTACTUALDATE` collapses away. See
   [World Economic Outlook](https://docs.one.org/tools/imf-reader/weo/#series-metadata).
+- `fetch_data_with_metadata` reads the series-metadata sidecar twice per call, which left two ways
+  for its two halves to disagree. It now pins its metadata leg to the exact `FlowRef` that served
+  its observations leg, instead of resolving the release label a second time. The flow mapping is
+  cached for an hour, so the old form could remap the release between the two legs and merge
+  metadata from a different dataflow version.
+- `fetch_data_with_metadata` now rebuilds `LASTACTUALDATE`, `NOTES` and `COUNTRY_UPDATE_DATE` when
+  its observations leg degraded them to null on a transient sidecar failure and its metadata leg
+  then read the same cache successfully. The old form returned those three columns null beside a
+  populated raw metadata column for the same series.
+- Fixed the series-metadata sidecar reading a literal `N/A` or `n/a` cell as null, which made it
+  indistinguishable from a genuinely empty one. `pandas.read_csv`'s default NA-token list was
+  catching values the IMF publishes, 19 cells across `METHODOLOGY_NOTES` and
+  `BASIS_OF_PROJECTIONS` in the April 2026 release. `weo.fetch_series_metadata()` and
+  `weo.api.get_series_metadata()` now preserve the literal verbatim. `fetch_data`'s derived `NOTES`
+  column still reads both forms as null, since null is the right "no note" there. This bumps the
+  cached sidecar's schema discriminator, so the first call after upgrading re-fetches the sidecar
+  rather than serving a warm 7-day parquet written under the old read.
 
 ## v2.1.0 (2026-08-14)
 

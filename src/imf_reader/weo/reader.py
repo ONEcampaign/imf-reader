@@ -15,9 +15,12 @@ from imf_reader.config import (
 from imf_reader.weo import Version
 from imf_reader.weo.api import (
     SERIES_METADATA_JOIN_KEYS,
+    FlowRef,
+    _get_weo_data_with_ref,
+    _rejoin_series_metadata_if_degraded,
     _resolve_flow_ref,
+    _series_metadata_for_ref,
     get_series_metadata,
-    get_weo_data,
     get_weo_versions,
 )
 from imf_reader.weo.parser import SDMXParser
@@ -103,20 +106,21 @@ def _fetch(version: Version) -> pd.DataFrame:
 
 def _fetch_data_resolved(
     version: Version | None = None,
-) -> tuple[Version, pd.DataFrame]:
+) -> tuple[Version, pd.DataFrame, FlowRef | None]:
     """Resolve ``version`` (or "latest") and fetch it, returning the
-    (version, data) pair actually served.
+    (version, data, ref) triple actually served.
 
     Shared by ``fetch_data`` and ``fetch_data_with_metadata`` so the served
-    version is threaded through as a return value rather than read back off
-    ``fetch_data.last_version_fetched`` afterwards. That module-level
-    attribute is process-global state: across threads, thread A calling this
-    function and thread B calling ``fetch_data()`` can interleave, with B's
-    assignment landing between A's call and a read of the attribute -- A
-    would then merge B's resolved release's metadata onto A's observations,
-    silent wrong information. Returning the version directly closes that
-    window; a fetch can take tens of seconds on a bulk release, so the
-    window a read-back would leave open is wide.
+    version -- and the FlowRef it was served from -- is threaded through as a
+    return value rather than read back off ``fetch_data.last_version_fetched``
+    afterwards. That module-level attribute is process-global state: across
+    threads, thread A calling this function and thread B calling
+    ``fetch_data()`` can interleave, with B's assignment landing between A's
+    call and a read of the attribute -- A would then merge B's resolved
+    release's metadata onto A's observations, silent wrong information.
+    Returning the version directly closes that window; a fetch can take tens
+    of seconds on a bulk release, so the window a read-back would leave open
+    is wide.
 
     Args:
         version: The version of the WEO data to fetch as a tuple eg
@@ -124,9 +128,13 @@ def _fetch_data_resolved(
                  resolved and fetched.
 
     Returns:
-        The (version, data) pair actually served -- may differ from
-        ``version`` if an unresolved ``version=None`` request rolled back to
-        an older release.
+        The (version, data, ref) triple actually served -- version may
+        differ from the requested ``version`` if an unresolved
+        ``version=None`` request rolled back to an older release. ``ref`` is
+        the FlowRef the observations were served from, or ``None`` if they
+        came from the bulk archive, which has no dataflow and therefore no
+        ref -- ``None`` is the signal that no series metadata exists for
+        this frame.
     """
     # Track this before validate_version reassigns `version`: the bounded
     # roll-back below may only kick in for an unresolved "latest" request. An
@@ -145,13 +153,13 @@ def _fetch_data_resolved(
         version = get_weo_versions()[0]
 
     try:
-        df = _fetch_data_for_version(version)
+        df, ref = _fetch_data_for_version(version)
     except NoDataError as original_error:
         if not resolve_latest:
             raise
-        version, df = _roll_back_and_fetch(version, original_error)
+        version, df, ref = _roll_back_and_fetch(version, original_error)
 
-    return version, df
+    return version, df, ref
 
 
 def fetch_data(version: Version | None = None) -> pd.DataFrame:
@@ -179,7 +187,7 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
     Returns:
         A pandas DataFrame containing the WEO data
     """
-    version, df = _fetch_data_resolved(version)
+    version, df, _ref = _fetch_data_resolved(version)
     fetch_data.last_version_fetched = version  # ty: ignore[unresolved-attribute]
 
     return df
@@ -265,6 +273,16 @@ def fetch_data_with_metadata(version: Version | None = None) -> pd.DataFrame:
     returned schema conditional on which release happened to be served --
     exactly what having two separate functions is meant to avoid.
 
+    Fetches the metadata leg through the FlowRef the observations leg was
+    actually served from, rather than re-resolving ``served_version`` the way
+    a plain ``fetch_series_metadata(served_version)`` call would: the flow
+    mapping backing that resolution has a 1-hour TTL, so a re-resolution
+    could land on a different FlowRef than the observations if a release gets
+    remapped between the two calls. It also repairs the observations frame's
+    own series-metadata columns if a transient failure degraded them to null
+    on the first read but a successful second read (this call's own) proves
+    the sidecar cache is now warm -- see ``api._rejoin_series_metadata_if_degraded``.
+
     Memory cost: measured against the live April 2026 release, ``fetch_data``
     alone is about 150 MB while this merged frame is about 400 MB, because
     the series-constant metadata is broadcast across every year of every
@@ -292,16 +310,32 @@ def fetch_data_with_metadata(version: Version | None = None) -> pd.DataFrame:
     # call and the read. Using the version this call's own resolution
     # returns keeps the two legs on the same release regardless of what else
     # is running. See _fetch_data_resolved's docstring.
-    served_version, df = _fetch_data_resolved(version)
+    served_version, df, ref = _fetch_data_resolved(version)
 
-    try:
-        meta = fetch_series_metadata(served_version)
-    except VersionNotAvailableError as exc:
+    # ref is None exactly when the observations came from the bulk archive
+    # (see _fetch_data_resolved), which has no series metadata endpoint at
+    # all -- there is nothing to merge.
+    if ref is None:
         raise VersionNotAvailableError(
             f"fetch_data served {served_version[0]} {served_version[1]}, a "
             "bulk-archive release with no series metadata. Use fetch_data() "
             "instead if observations alone are enough."
-        ) from exc
+        )
+
+    # Fetched through the same ref the observations were served from, rather
+    # than fetch_series_metadata(served_version), which would re-resolve
+    # that version label to a FlowRef through the 1-hour-cached flow mapping
+    # -- and could land on a different FlowRef than the observations if a
+    # release gets remapped between the two calls. See this function's
+    # docstring.
+    meta = _series_metadata_for_ref(ref)
+
+    # A successful metadata fetch just proved the sidecar cache is warm, so
+    # this is the point to repair df's own series-metadata columns if an
+    # earlier, independent read of the same sidecar (inside
+    # _fetch_data_resolved -> get_weo_data) degraded them to null on a
+    # transient failure. See _rejoin_series_metadata_if_degraded's docstring.
+    df = _rejoin_series_metadata_if_degraded(df, ref)
 
     join_keys = list(SERIES_METADATA_JOIN_KEYS)
 
@@ -330,7 +364,7 @@ def fetch_data_with_metadata(version: Version | None = None) -> pd.DataFrame:
     return df
 
 
-def _fetch_data_for_version(version: Version) -> pd.DataFrame:
+def _fetch_data_for_version(version: Version) -> tuple[pd.DataFrame, FlowRef | None]:
     """Fetch one version through the API, falling back to the bulk scraper
     only when the API cannot serve that version at all.
 
@@ -350,9 +384,16 @@ def _fetch_data_for_version(version: Version) -> pd.DataFrame:
     archive release mislabelled as latest -- that asymmetry is deliberate:
     degrade to the archive when the label stays right, fail loudly when it
     would not.
+
+    Returns:
+        The (data, ref) pair. ``ref`` is the FlowRef the API served this
+        version from, or ``None`` when the bulk archive served it instead --
+        the bulk archive has no dataflow and therefore no ref, so ``None``
+        is the signal callers use to know no series metadata exists for this
+        frame.
     """
     try:
-        return get_weo_data(version)
+        return _get_weo_data_with_ref(version)
     except (VersionNotAvailableError, DataflowDiscoveryError) as exc:
         logger.warning(
             "API path failed for %s %s (%s: %s); falling back to the bulk archive",
@@ -361,12 +402,12 @@ def _fetch_data_for_version(version: Version) -> pd.DataFrame:
             type(exc).__name__,
             exc,
         )
-        return _fetch(version)
+        return _fetch(version), None
 
 
 def _roll_back_and_fetch(
     version: Version, original_error: NoDataError
-) -> tuple[Version, pd.DataFrame]:
+) -> tuple[Version, pd.DataFrame, FlowRef | None]:
     """Bounded roll-back for an unresolved ``version=None`` request.
 
     Reached only when the caller asked for "latest" and neither the API nor
@@ -378,7 +419,7 @@ def _roll_back_and_fetch(
     candidate also fails.
 
     Returns:
-        The (version, data) pair that was actually served.
+        The (version, data, ref) triple that was actually served.
     """
     versions = get_weo_versions()
     start = versions.index(version) + 1 if version in versions else 0
@@ -389,7 +430,8 @@ def _roll_back_and_fetch(
             f" Rolling back to {candidate[0]} {candidate[1]}..."
         )
         try:
-            return candidate, _fetch_data_for_version(candidate)
+            df, ref = _fetch_data_for_version(candidate)
+            return candidate, df, ref
         except NoDataError:
             version = candidate
             continue
