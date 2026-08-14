@@ -66,13 +66,12 @@ population, employment, or unemployment, read `CONCEPT_CODE` or `CONCEPT_LABEL` 
 In the bulk archive, the IMF marks roughly 1,200 observations per release with the token `--`,
 its convention for "zero, or less than half the final digit shown" rather than a true zero. A
 deflator or index cell reading `--` one year and a tiny value like `0.002` the next is common; the
-`--` is a rounding artefact, not a report of zero. `imf_reader` does not write `0.0` for these
-cells and does not add a status column to flag them, because either choice would create a
-permanent public column for a discontinued, 0.3%-of-cells archive. Instead, rows carrying `--` in
-`OBS_VALUE` are dropped, same as any other null observation, and the count dropped for that reason
-is logged at `debug`. The API path has no such cells either: every release from April 2025 onward
-simply omits the observation rather than marking it `--`, so the two paths agree once the drop is
-applied.
+`--` is a rounding artefact, not a report of zero. Rows carrying `--` in `OBS_VALUE` are dropped,
+same as any other null observation, rather than written as `0.0` or flagged with a status column:
+either alternative would create a permanent public column for a discontinued, 0.3%-of-cells
+archive. The count dropped for that reason is logged at `debug`. The API path has no such cells
+either: every release from April 2025 onward simply omits the observation rather than marking it
+`--`, so the two paths agree once the drop is applied.
 
 ## `LASTACTUALDATE` and `NOTES` come from different fields on each path
 
@@ -82,25 +81,46 @@ path, `LASTACTUALDATE` comes from a per-series metadata sidecar's `LATEST_ACTUAL
 field, and `NOTES` comes from the same sidecar's `METHODOLOGY_NOTES` field. `METHODOLOGY_NOTES`
 and the bulk archive's `NOTES` are different free text describing different things.
 
-`LATEST_ACTUAL_ANNUAL_DATA` is not always a plain year. About 10.7% of populated series carry a
-fiscal-year form, `FY2023/24`, and `imf_reader` maps it to `2023`, its leading year. This is a
-one-way, lossy mapping: the fiscal-year distinction is discarded, not encoded, and there is no
-way to recover it from `LASTACTUALDATE`. If you're reconciling against the IMF's own published
-metadata, don't read `2023` as "reported as of calendar year 2023" — the leading-year convention
-only approximates that. If the fiscal-year boundary matters to your use case, read
-`START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API directly; `imf_reader` does not expose it.
-The bulk archive's `LASTACTUALDATE` has no fiscal-year forms at all, so mapping to the leading
-year is what keeps `LASTACTUALDATE` comparable across the two paths.
+About 10.7% of populated series carry `LATEST_ACTUAL_ANNUAL_DATA` in a fiscal-year form,
+`FY2023/24`, rather than a plain year, and `imf_reader` maps it to `2023`, its leading year. This
+is a one-way, lossy mapping: the fiscal-year distinction is discarded, and there is no way to
+recover it from `LASTACTUALDATE`. If you're reconciling against the IMF's own published metadata,
+don't read `2023` as "reported as of calendar year 2023". The leading-year convention only
+approximates that. If the fiscal-year boundary matters to your use case, call
+`weo.fetch_series_metadata()`. Its `LATEST_ACTUAL_ANNUAL_DATA` column preserves the raw
+`FY2023/24` form that `LASTACTUALDATE` collapses to its leading year, and its
+`START_END_MONTHS_OF_REPORTING_YEAR` column gives the fiscal year's start and end months, so both
+halves of this gotcha are recoverable from that frame. See
+[Series metadata](weo.md#series-metadata). This route is API-served releases only, and that
+boundary coincides exactly with where fiscal-year forms exist in the first place, since the bulk
+archive's `LASTACTUALDATE` is always a plain year, which is also what keeps `LASTACTUALDATE`
+comparable across the two paths once mapped to the leading year.
 
-No column in the 16 marks which vocabulary a row's `NOTES` came from. If you concatenate releases
-across the April 2025 boundary and run text search, deduplication, or NLP over `NOTES`, you will
-silently mix two unrelated vocabularies with no signal to separate them. Split on the release
+Which vocabulary a row's `NOTES` came from has no marker among the 16 columns. If you concatenate
+releases across the April 2025 boundary and run text search, deduplication, or NLP over `NOTES`,
+you will silently mix two unrelated vocabularies with no signal to separate them. Split on the release
 version you requested (or `weo.fetch_data.last_version_fetched`) before treating `NOTES` as one
 corpus.
 
 If the metadata sidecar request fails, `LASTACTUALDATE`, `NOTES`, and `COUNTRY_UPDATE_DATE` (see
 [World Economic Outlook](weo.md) for that column) fall back to null for that call, and a warning
 is logged. This degrades to less information rather than failing the whole fetch.
+
+## Series metadata is API-only
+
+`weo.fetch_series_metadata()` reads the same per-series sidecar that `LASTACTUALDATE` and `NOTES`
+are built from, but exposes it as its own frame rather than folding a handful of fields into
+`fetch_data`'s 16 columns. The sidecar itself only exists for API-served releases, so this
+function serves only those releases, unlike `fetch_data`, which falls back to the bulk archive.
+
+That boundary is signalled differently from the `NOTES` case above. `NOTES` mixes two
+vocabularies across the April 2025 boundary with no column marking which one a given row came
+from, a silent vocabulary boundary. Series metadata takes the opposite approach on purpose. A
+version the API can't serve raises `VersionNotAvailableError` rather than returning a frame of
+null columns. Null columns would read as "the IMF publishes no methodology for these series",
+which is false. The truth is that this source has no series metadata for that release at all, and
+an exception says so rather than leaving that distinction for the caller to discover later. See
+[Series metadata](weo.md#series-metadata) for the full column reference.
 
 ## `REF_AREA_IMF_CODE`
 

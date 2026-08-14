@@ -1,5 +1,43 @@
 # Changelog
 
+## v2.2.0 (2026-08-14)
+
+- Three new functions read series-level metadata for a WEO release, one row per series, keyed on
+  `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`. `weo.fetch_series_metadata(version=None)`
+  returns 41 columns against the April 2026 release, 8,200 rows, every column typed `string`.
+  `weo.fetch_data_with_metadata(version=None)` returns `fetch_data`'s observations left-merged
+  with that metadata, 54 columns, and resolves both halves to the same release by construction, so
+  the two can't silently drift apart the way two separate `version=None` calls could.
+  `weo.api.get_series_metadata(version=None)` is the api-layer equivalent of
+  `fetch_series_metadata`. `fetch_data`'s existing 16 columns are unchanged. All three are purely
+  additive.
+- Series metadata is served only for releases the API itself carries (April 2025 onward). A
+  version the API can't serve raises `VersionNotAvailableError` rather than returning null columns,
+  unlike `fetch_data`'s metadata sidecar, which degrades to null and logs a warning on a failed
+  request.
+- This closes the gap the "Known gotchas" fiscal-year entry named in v2.1.0.
+  `START_END_MONTHS_OF_REPORTING_YEAR`, and the raw `LATEST_ACTUAL_ANNUAL_DATA` with its
+  fiscal-year forms such as `FY2023/24` intact, are now both readable from
+  `weo.fetch_series_metadata()`, recovering the distinction `LASTACTUALDATE` collapses away. See
+  [World Economic Outlook](https://docs.one.org/tools/imf-reader/weo/#series-metadata).
+- `fetch_data_with_metadata` reads the series-metadata sidecar twice per call, which left two ways
+  for its two halves to disagree. It now pins its metadata leg to the exact `FlowRef` that served
+  its observations leg, instead of resolving the release label a second time. The flow mapping is
+  cached for an hour, so the old form could remap the release between the two legs and merge
+  metadata from a different dataflow version.
+- `fetch_data_with_metadata` now rebuilds `LASTACTUALDATE`, `NOTES` and `COUNTRY_UPDATE_DATE` when
+  its observations leg degraded them to null on a transient sidecar failure and its metadata leg
+  then read the same cache successfully. The old form returned those three columns null beside a
+  populated raw metadata column for the same series.
+- Fixed the series-metadata sidecar reading a literal `N/A` or `n/a` cell as null, which made it
+  indistinguishable from a genuinely empty one. `pandas.read_csv`'s default NA-token list was
+  catching values the IMF publishes, 19 cells across `METHODOLOGY_NOTES` and
+  `BASIS_OF_PROJECTIONS` in the April 2026 release. `weo.fetch_series_metadata()` and
+  `weo.api.get_series_metadata()` now preserve the literal verbatim. `fetch_data`'s derived `NOTES`
+  column still reads both forms as null, since null is the right "no note" there. This bumps the
+  cached sidecar's schema discriminator, so the first call after upgrading re-fetches the sidecar
+  rather than serving a warm 7-day parquet written under the old read.
+
 ## v2.1.0 (2026-08-14)
 
 - **Raised the `pyarrow` floor to `pyarrow>=16.0`.** pyarrow 14 was built against numpy 1.x and

@@ -64,6 +64,19 @@ REF_AREA_LABEL  TIME_PERIOD  OBS_VALUE UNIT_LABEL
        Nigeria         2024   4.071067    Percent
 ```
 
+`fetch_data()` returns observations. The IMF also publishes series-level metadata, one row per
+series, covering methodology notes, classification codes, and fiscal-year reporting conventions:
+
+```python
+meta = weo.fetch_series_metadata()
+merged = weo.fetch_data_with_metadata()
+```
+
+`fetch_series_metadata()` returns that metadata on its own, keyed on `REF_AREA_CODE`,
+`CONCEPT_CODE`, and `FREQ_CODE`. `fetch_data_with_metadata()` returns the two merged, resolving
+both halves to the same release. Series metadata covers April 2025 onward, the releases the IMF
+API itself carries.
+
 Fetch SDR allocations and holdings:
 
 ```python
