@@ -27,7 +27,7 @@ print(cache.get_cache_dir())
 
 !!! warning "Heads up"
 
-    Old version directories are never deleted automatically; they accumulate on disk as you upgrade. Segmentation only helps across a released version bump — an editable or git-pinned install stays inside the same version segment while the code underneath it changes, so it does *not* get a fresh cache directory just because the code changed. See [Editable and git installs](#editable-and-git-installs) below.
+    Old version directories accumulate on disk as you upgrade, since nothing removes them automatically. Segmentation only helps across a released version bump. An editable or git-pinned install stays inside the same version segment while the code underneath it changes, so the cache directory stays fixed even as the code changes. See [Editable and git installs](#editable-and-git-installs) below.
 
 ## How long entries live
 
@@ -40,7 +40,7 @@ print(cache.get_cache_dir())
 | SDR latest-available-date lookup                                       | 1 day  |
 
 WEO series metadata is cached separately from WEO observations, so a failed metadata request
-doesn't invalidate or degrade the already-cached observations.
+leaves the already-cached observations untouched.
 
 ## Redirect the cache
 
@@ -99,7 +99,7 @@ sdr.clear_cache()   # deprecated, use cache.clear_cache(scope="sdr")
 
 ## Editable and git installs
 
-The cache root is segmented by _installed version_, not by commit (see [Where the cache lives](#where-the-cache-lives)). An editable install (`pip install -e .`) or a git-pinned install keeps reporting the same version as the code underneath it changes, so it stays inside the same cache directory across a `git pull` or a branch switch — a stale entry written by older code can outlive the code that wrote it.
+The cache root is segmented by _installed version_, not by commit (see [Where the cache lives](#where-the-cache-lives)). An editable install (`pip install -e .`) or a git-pinned install keeps reporting the same version as the code underneath it changes, so it stays inside the same cache directory across a `git pull` or a branch switch. A stale entry written by older code can outlive the code that wrote it.
 
 If you're on one of these installs and pick up a change to how WEO data is fetched, resolved, or labelled, clear the cache explicitly rather than relying on the version segment to do it for you:
 
@@ -109,7 +109,7 @@ from imf_reader import cache
 cache.clear_cache()
 ```
 
-If you've saved an extract to disk outside the package's cache — a CSV or parquet copy labelled with a WEO release — re-pull it rather than trusting the label; the code that produced it may have changed since you saved it.
+If you've saved an extract to disk outside the package's cache (a CSV or parquet copy labelled with a WEO release), re-pull it rather than trusting the label. The code that produced it may have changed since you saved it.
 
 ## Inspect cache paths
 
@@ -124,7 +124,7 @@ cache.get_http_cache_path()       # the HTTP sublayer
 
 !!! warning "Heads up"
 
-    `get_dataframe_cache_dir()` returns the SDR sublayer only. It exists for parity with `oda_reader`, whose single dataframe sublayer maps directly to one helper. `imf-reader` splits parsed frames across three sublayers (`sdr`, `weo_api`, `weo_sdmx_parsed`), so the WEO ones aren't reachable through this helper.
+    `get_dataframe_cache_dir()` returns the SDR sublayer only, for parity with `oda_reader`, whose single dataframe sublayer maps directly to one helper. `imf-reader` splits parsed frames across three sublayers (`sdr`, `weo_api`, `weo_sdmx_parsed`).
 
     For a WEO cache path, build it from the root instead:
 

@@ -44,12 +44,12 @@ jobs:
           uv run ruff format src tests --check
           uv run ruff check src tests
 
-  # The jobs above all install from uv.lock, i.e. the newest resolution. That
-  # never exercises the version floors declared in pyproject.toml, so a floor
-  # can drift into being wrong without anything failing. This job resolves each
-  # direct dependency down to its declared minimum (transitive deps still float
-  # up) and runs the suite there, which is the only thing that makes those
-  # floors a tested claim rather than an assumption.
+  # The jobs above all install from uv.lock, i.e. the newest resolution, so a
+  # floor declared in pyproject.toml can drift into being wrong without any of
+  # them failing. This job resolves each direct dependency down to its
+  # declared minimum (transitive deps still float up) and runs the suite
+  # there, which is the only thing that makes those floors a tested claim
+  # rather than an assumption.
   floors:
     runs-on: ubuntu-latest
     name: dependency floors (lowest-direct)

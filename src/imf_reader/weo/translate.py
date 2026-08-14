@@ -80,10 +80,11 @@ def to_api_vocabulary(df: pd.DataFrame) -> pd.DataFrame:
 def _translate_area_code(area_codes: pd.Series) -> pd.Series:
     """Map legacy numeric area codes onto the api.imf.org vocabulary.
 
-    Does not ``dropna()`` before checking, unlike a plain set difference would
-    tempt: a null area code would otherwise map silently to ``<NA>`` in a key
-    column, which is the failure this module exists to prevent (see
-    ``_translate_unit_code``, which raises on a null pair for the same reason).
+    Checks every area code including nulls, rather than calling ``dropna()``
+    first as a plain set difference would tempt: a null area code would
+    otherwise map silently to ``<NA>`` in a key column, which is the failure
+    this module exists to prevent (see ``_translate_unit_code``, which raises
+    on a null pair for the same reason).
 
     Raises:
         ValueError: An area code is null, or has no entry in

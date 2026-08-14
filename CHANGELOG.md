@@ -4,9 +4,10 @@
 
 - **Raised the `pyarrow` floor to `pyarrow>=16.0`.** pyarrow 14 was built against numpy 1.x and
   cannot import alongside numpy 2 at all, which made every parquet cache write fail silently and
-  turned the disk cache into a no-op. The `pandas` floor stays at `pandas>=2.2.2`: the package uses
-  no pandas 3 API, and pandas 2.2.2 was checked against the live IMF API to return the same frame
-  as pandas 3.0.5, with the same 16 columns in the same order, the same dtypes and the same values.
+  turned the disk cache into a no-op. The `pandas` floor stays at `pandas>=2.2.2`. The package's
+  pandas usage is confined to APIs available in pandas 2, and pandas 2.2.2 was checked against the
+  live IMF API to return the same frame as pandas 3.0.5, with the same 16 columns in the same
+  order, the same dtypes and the same values.
 - The `dependency floors (lowest-direct)` CI job tested the newest resolution rather than the
   declared minimums, so the floors were never a tested claim. `uv run` re-resolves from the
   lockfile, so the step after `uv sync --resolution lowest-direct` reinstalled the newest versions
@@ -28,30 +29,30 @@
 ### Corrected data
 
 - `weo.fetch_data()` and `weo.fetch_data(("October", 2025))` both returned the same underlying
-  data — the April 2026 release, labelled as October 2025. Version resolution keyed off a
+  data, the April 2026 release labelled as October 2025. Version resolution keyed off a
   dataflow's `lastUpdatedAt` structure annotation, which is inverted on the IMF's live WEO
   dataflows, instead of reading `PUBLICATION_DATE` from the data itself.
   `fetch_data(("October", 2025))` now returns the actual October 2025 release, served from a
   separate `WEO_2025_OCT_VINTAGE` dataflow the IMF publishes for it: 354,240 rows (previously
   361,733), `TIME_PERIOD` reaching 2030 (previously 2031), and 35.1% of overlapping observations
-  differ from what was previously returned by more than rounding — e.g. world real GDP growth for
+  differ from what was previously returned by more than rounding, e.g. world real GDP growth for
   2025 is now 3.163, what the IMF actually published for the October 2025 WEO, not 3.441.
   `weo.get_weo_versions()` gains `("April", 2026)`, and `fetch_data()` with no argument now
   correctly resolves to it.
 - If you're on an editable or git install, run `imf_reader.cache.clear_cache()` after upgrading.
-  The cache directory is scoped by installed version; an editable/git install stays inside the same
+  The cache directory is scoped by installed version. An editable or git install stays inside the same
   version segment across this change, so a cache entry written before this fix can otherwise keep
   serving the mislabelled data. If you have an extract saved to disk and labelled "October 2025",
-  re-pull it — it may hold the April 2026 release under the wrong label. See
+  re-pull it. It may hold the April 2026 release under the wrong label. See
   [Caching](https://docs.one.org/tools/imf-reader/caching/) for detail.
 
 ### New and repaired columns
 
 - `LASTACTUALDATE` and `NOTES`, previously always null on every API-served release (April 2025
   onward), are now populated. `LASTACTUALDATE` comes from a per-series metadata sidecar's
-  `LATEST_ACTUAL_ANNUAL_DATA` field; fiscal-year forms such as `FY2023/24` are collapsed to their
-  leading year, `2023` (about 10.7% of series) — this discards the fiscal-year distinction rather
-  than encoding it, and there's no way back from `LASTACTUALDATE` alone (see "Known gotchas"
+  `LATEST_ACTUAL_ANNUAL_DATA` field. Fiscal-year forms such as `FY2023/24` are collapsed to their
+  leading year, `2023` (about 10.7% of series). This discards the fiscal-year distinction, and
+  there's no way back from `LASTACTUALDATE` alone (see "Known gotchas"
   below). `NOTES` comes from the same sidecar's `METHODOLOGY_NOTES` field, which is different free
   text from the bulk archive's `NOTES` column.
 - A new column, `COUNTRY_UPDATE_DATE` (`datetime64[us]`), carries the date each country's data was
@@ -59,23 +60,21 @@
   bulk archive's XML carries no per-country revision date). It's appended after `SCALE_LABEL`, so
   the first 15 columns, and any positional access to them, are unaffected.
 - If the metadata sidecar request fails, all three columns fall back to null for that call and a
-  warning is logged, rather than failing the fetch.
+  warning is logged.
 
 ### Known gotchas
 
 - **`LASTACTUALDATE`'s fiscal-year mapping is lossy and one-way.** `FY2023/24` becomes `2023`,
-  and the fiscal-year distinction is gone — not encoded, not recoverable from this column. Don't
-  read `2023` as "reported as of calendar year 2023"; the leading-year convention only
-  approximates that. If the fiscal-year boundary matters, read
-  `START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API directly — this package does not expose
-  it.
+  discarding the fiscal-year distinction with no way to recover it from this column. `2023` only
+  approximates "reported as of calendar year 2023" under the leading-year convention. If the
+  fiscal-year boundary matters, read `START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API
+  directly, outside what this package returns.
 - **`NOTES` silently mixes two vocabularies across the April 2025 boundary, with no column to tell
-  them apart.** Before April 2025 it's the bulk archive's `NOTES`; from April 2025 it's the API's
-  `METHODOLOGY_NOTES` — different free text, describing different things. None of the 16 columns
-  marks the boundary. We're deliberately not adding a provenance column for this release. If you
-  concatenate releases and do text search, deduplication, or NLP over `NOTES`, split on the
-  release version you requested (or `weo.fetch_data.last_version_fetched`) first, rather than
-  treating `NOTES` as one corpus.
+  them apart.** Before April 2025 it's the bulk archive's `NOTES`. From April 2025 it's the API's
+  `METHODOLOGY_NOTES`, which is different free text describing different things. None of the 16 columns
+  marks the boundary. If you concatenate releases and do text search, deduplication, or NLP over
+  `NOTES`, split on the release version you requested (or `weo.fetch_data.last_version_fetched`)
+  first rather than treating `NOTES` as one corpus.
 
 ### Other behaviour changes
 
@@ -89,7 +88,7 @@
   cache. A cache entry that fails to read is now treated as a miss and removed, rather than failing
   every subsequent call until a manual `clear_cache()`.
 - Bulk-archive observations published as `--` (below display precision, not zero) continue to be
-  dropped rather than written as `0.0` or flagged with a status column; the count dropped is now
+  dropped rather than written as `0.0` or flagged with a status column. The count dropped is now
   logged at `debug`.
 - A dataflow catalogue that responds successfully but carries no usable WEO dataflow now raises
   `DataflowDiscoveryError`. Previously that response produced an empty version mapping, which was
