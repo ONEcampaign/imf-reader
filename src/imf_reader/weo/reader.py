@@ -6,12 +6,21 @@ import pandas as pd
 
 from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import _legacy_weo_clear_cache as clear_cache  # noqa: F401
-from imf_reader.config import NoDataError, logger
+from imf_reader.config import (
+    DataflowDiscoveryError,
+    NoDataError,
+    VersionNotAvailableError,
+    logger,
+)
 from imf_reader.weo import Version
 from imf_reader.weo.api import get_weo_data, get_weo_versions
 from imf_reader.weo.parser import SDMXParser
 from imf_reader.weo.scraper import SDMXScraper
 from imf_reader.weo.translate import to_api_vocabulary
+
+# Bound on how many published versions roll_back will try, newest-first from
+# get_weo_versions(), before giving up on an unresolved version=None request.
+_MAX_ROLLBACK_ATTEMPTS = 3
 
 
 def validate_version(version: tuple) -> Version:
@@ -68,30 +77,6 @@ def gen_latest_version() -> Version:
         return "October", current_year
 
 
-def roll_back_version(version: Version) -> Version:
-    """Roll back version to the expected previous version.
-
-    e.g. April 2024 rolls back to October 2023, and October 2023 rolls back to April 2023.
-
-    Args:
-        version: The version to roll back
-
-    Returns:
-        The rolled back version
-    """
-
-    if version[0] == "October":
-        logger.debug(f"Rolling back version to April {version[1]}")
-        return "April", version[1]
-
-    elif version[0] == "April":
-        logger.debug(f"Rolling back version to October {version[1] - 1}")
-        return "October", version[1] - 1
-
-    else:
-        raise ValueError(f"Invalid version: {version}")
-
-
 @dataframe_cache(ttl=timedelta(days=7), sublayer="weo_sdmx_parsed")
 def _fetch(version: Version) -> pd.DataFrame:
     """Scrape, parse, and translate WEO SDMX data for one version, with disk-backed caching.
@@ -131,30 +116,96 @@ def fetch_data(version: Version | None = None) -> pd.DataFrame:
         A pandas DataFrame containing the WEO data
     """
 
+    # Track this before validate_version reassigns `version`: the bounded
+    # roll-back below may only kick in for an unresolved "latest" request. An
+    # explicit version that cannot be served must raise, never quietly return
+    # a different release under the caller's requested label.
+    resolve_latest = version is None
+
     if version is not None:
         try:
             version = validate_version(version)
         except Exception as e:
             raise NoDataError(
-                f"Could not fetch data for version: {version[0]} {version[1]}. {e!s}"
+                f"Could not fetch data for version: {version!r}. {e!s}"
             ) from e
     else:
         version = get_weo_versions()[0]
 
     try:
-        df = get_weo_data(version)
-
-    except (NoDataError, ValueError):
-        try:
-            df = _fetch(version)
-        except NoDataError:
-            logger.info(
-                f"No data found for expected latest version: {version[0]} {version[1]}."
-                f" Rolling back version..."
-            )
-            latest_version = roll_back_version(version)
-            return fetch_data(latest_version)
+        df = _fetch_data_for_version(version)
+    except NoDataError as original_error:
+        if not resolve_latest:
+            raise
+        version, df = _roll_back_and_fetch(version, original_error)
 
     fetch_data.last_version_fetched = version  # ty: ignore[unresolved-attribute]
 
     return df
+
+
+def _fetch_data_for_version(version: Version) -> pd.DataFrame:
+    """Fetch one version through the API, falling back to the bulk scraper
+    only when the API cannot serve that version at all.
+
+    ``VersionNotAvailableError`` and ``DataflowDiscoveryError`` (both
+    ``NoDataError`` subclasses) are the only signals that mean "try the bulk
+    archive instead" -- every other failure inside the API path (a parse bug,
+    an ``_align_schema`` bug, a codelist problem) must surface as-is rather
+    than being mistaken for a missing version and silently rerouted.
+
+    An unusable dataflow catalogue (``DataflowDiscoveryError``) means the API
+    cannot serve *any* version, not just this one, but for an explicit
+    version the bulk archive is still the correct source: it returns the
+    requested release under its own correct label. An unresolved
+    ``version=None`` request never reaches this line, because ``fetch_data``
+    resolves "latest" through ``get_weo_versions()`` first, which raises the
+    same error and fails loudly rather than silently degrading to an
+    archive release mislabelled as latest -- that asymmetry is deliberate:
+    degrade to the archive when the label stays right, fail loudly when it
+    would not.
+    """
+    try:
+        return get_weo_data(version)
+    except (VersionNotAvailableError, DataflowDiscoveryError) as exc:
+        logger.warning(
+            "API path failed for %s %s (%s: %s); falling back to the bulk archive",
+            version[0],
+            version[1],
+            type(exc).__name__,
+            exc,
+        )
+        return _fetch(version)
+
+
+def _roll_back_and_fetch(
+    version: Version, original_error: NoDataError
+) -> tuple[Version, pd.DataFrame]:
+    """Bounded roll-back for an unresolved ``version=None`` request.
+
+    Reached only when the caller asked for "latest" and neither the API nor
+    the bulk scraper could serve the version ``get_weo_versions()`` named as
+    newest. Walks the rest of that already-published, newest-first list --
+    rather than guessing a previous release from the calendar -- so this
+    cannot invent a release that was never published. Capped at
+    ``_MAX_ROLLBACK_ATTEMPTS``; re-raises ``original_error`` if every
+    candidate also fails.
+
+    Returns:
+        The (version, data) pair that was actually served.
+    """
+    versions = get_weo_versions()
+    start = versions.index(version) + 1 if version in versions else 0
+
+    for candidate in versions[start : start + _MAX_ROLLBACK_ATTEMPTS]:
+        logger.warning(
+            f"No data found for expected latest version: {version[0]} {version[1]}."
+            f" Rolling back to {candidate[0]} {candidate[1]}..."
+        )
+        try:
+            return candidate, _fetch_data_for_version(candidate)
+        except NoDataError:
+            version = candidate
+            continue
+
+    raise original_error

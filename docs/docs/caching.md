@@ -25,6 +25,10 @@ print(cache.get_cache_dir())
 
     The root is segmented by package version. Each version's cache lives in its own directory, so upgrading `imf-reader` starts with a clean cache automatically.
 
+!!! warning "Heads up"
+
+    Old version directories are never deleted automatically; they accumulate on disk as you upgrade. Segmentation only helps across a released version bump — an editable or git-pinned install stays inside the same version segment while the code underneath it changes, so it does *not* get a fresh cache directory just because the code changed. See [Editable and git installs](#editable-and-git-installs) below.
+
 ## How long entries live
 
 | Data                                                      | TTL    |
@@ -88,6 +92,20 @@ from imf_reader import weo, sdr
 weo.clear_cache()   # deprecated, use cache.clear_cache(scope="weo")
 sdr.clear_cache()   # deprecated, use cache.clear_cache(scope="sdr")
 ```
+
+## Editable and git installs
+
+The cache root is segmented by _installed version_, not by commit (see [Where the cache lives](#where-the-cache-lives)). An editable install (`pip install -e .`) or a git-pinned install keeps reporting the same version as the code underneath it changes, so it stays inside the same cache directory across a `git pull` or a branch switch — a stale entry written by older code can outlive the code that wrote it.
+
+If you're on one of these installs and pick up a change to how WEO data is fetched, resolved, or labelled, clear the cache explicitly rather than relying on the version segment to do it for you:
+
+```python
+from imf_reader import cache
+
+cache.clear_cache()
+```
+
+If you've saved an extract to disk outside the package's cache — a CSV or parquet copy labelled with a WEO release — re-pull it rather than trusting the label; the code that produced it may have changed since you saved it.
 
 ## Inspect cache paths
 

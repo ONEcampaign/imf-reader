@@ -14,6 +14,7 @@ directly: `test_april_2025_matches_across_both_paths` in `tests/test_weo/test_sc
 asserts the two paths produce matching data for that release.
 
 !!! info "Why"
+
     The two sources use different native schemas. The API serves observations as CSV keyed on its
     own area and unit codes. The bulk archive holds an older SDMX XML layout, keyed on legacy numeric area
     codes and a different unit vocabulary. `imf_reader` translates both onto the API's vocabulary
@@ -44,6 +45,7 @@ raises `cache.BulkPayloadCorruptError` with `is_retryable=False`, so retry logic
 distinguish this from an ordinary network failure and stop.
 
 !!! warning "Heads up"
+
     `fetch_data(("April", 2021))` and `fetch_data(("October", 2023))` always raise
     `cache.BulkPayloadCorruptError`. The corruption is permanent at the IMF's source, so no retry
     or cache clear recovers it.
@@ -59,11 +61,46 @@ one on API releases. A filter on `UNIT_CODE` for these three concepts matches re
 April 2025 and misses everything from April 2025 onward. When working across versions for
 population, employment, or unemployment, read `CONCEPT_CODE` or `CONCEPT_LABEL` instead.
 
-## Columns that stop being populated
+## Observations published as `--`
 
-`NOTES` and `LASTACTUALDATE` are populated only for releases before October 2025. The API
-exposes neither observation-level notes nor a last-actual-date, so from October 2025 onward
-both columns are present in the frame but hold nulls throughout.
+In the bulk archive, the IMF marks roughly 1,200 observations per release with the token `--`,
+its convention for "zero, or less than half the final digit shown" rather than a true zero. A
+deflator or index cell reading `--` one year and a tiny value like `0.002` the next is common; the
+`--` is a rounding artefact, not a report of zero. `imf_reader` does not write `0.0` for these
+cells and does not add a status column to flag them, because either choice would create a
+permanent public column for a discontinued, 0.3%-of-cells archive. Instead, rows carrying `--` in
+`OBS_VALUE` are dropped, same as any other null observation, and the count dropped for that reason
+is logged at `debug`. The API path has no such cells either: every release from April 2025 onward
+simply omits the observation rather than marking it `--`, so the two paths agree once the drop is
+applied.
+
+## `LASTACTUALDATE` and `NOTES` come from different fields on each path
+
+`LASTACTUALDATE` and `NOTES` are populated on both paths, but from different underlying fields.
+On the bulk archive path, both come from the XML series attributes of the same name. On the API
+path, `LASTACTUALDATE` comes from a per-series metadata sidecar's `LATEST_ACTUAL_ANNUAL_DATA`
+field, and `NOTES` comes from the same sidecar's `METHODOLOGY_NOTES` field. `METHODOLOGY_NOTES`
+and the bulk archive's `NOTES` are different free text describing different things.
+
+`LATEST_ACTUAL_ANNUAL_DATA` is not always a plain year. About 10.7% of populated series carry a
+fiscal-year form, `FY2023/24`, and `imf_reader` maps it to `2023`, its leading year. This is a
+one-way, lossy mapping: the fiscal-year distinction is discarded, not encoded, and there is no
+way to recover it from `LASTACTUALDATE`. If you're reconciling against the IMF's own published
+metadata, don't read `2023` as "reported as of calendar year 2023" — the leading-year convention
+only approximates that. If the fiscal-year boundary matters to your use case, read
+`START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API directly; `imf_reader` does not expose it.
+The bulk archive's `LASTACTUALDATE` has no fiscal-year forms at all, so mapping to the leading
+year is what keeps `LASTACTUALDATE` comparable across the two paths.
+
+No column in the 16 marks which vocabulary a row's `NOTES` came from. If you concatenate releases
+across the April 2025 boundary and run text search, deduplication, or NLP over `NOTES`, you will
+silently mix two unrelated vocabularies with no signal to separate them. Split on the release
+version you requested (or `weo.fetch_data.last_version_fetched`) before treating `NOTES` as one
+corpus.
+
+If the metadata sidecar request fails, `LASTACTUALDATE`, `NOTES`, and `COUNTRY_UPDATE_DATE` (see
+[World Economic Outlook](weo.md) for that column) fall back to null for that call, and a warning
+is logged. This degrades to less information rather than failing the whole fetch.
 
 ## `REF_AREA_IMF_CODE`
 

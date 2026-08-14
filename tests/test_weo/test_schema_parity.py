@@ -1,10 +1,9 @@
 """Live acceptance test that the API and SDMX paths agree on April 2025.
 
 April 2025 is the one release both paths can serve: the bulk SDMX archive's
-last release, and the API's earliest. design-schema.md §4.8 calls this out as
-the only test that would catch the IMF renaming a codelist entry -- unit tests
-patch ``_fetch_codelist``, so they can't see a real rename; this test can't,
-because it fetches both.
+last release, and the API's earliest. This is the only test that would catch
+the IMF renaming a codelist entry -- unit tests patch ``_fetch_codelist``, so
+they can't see a real rename; this test can't, because it fetches both.
 """
 
 import os
@@ -19,11 +18,17 @@ from imf_reader.weo.reader import _fetch
 # both paths, established independently of the translation logic under test.
 KEY_COLUMNS = ["REF_AREA_CODE", "CONCEPT_CODE", "FREQ_CODE", "TIME_PERIOD"]
 
-# NOTES and LASTACTUALDATE are a documented divergence (design-schema.md §1.10):
-# the API never populates observation-level notes or last-actual-date, so the
-# SDMX path always has data there that the API path never does. Comparing them
-# would fail on every run for a reason unrelated to what this test guards.
-UNCOMPARABLE_COLUMNS = ["NOTES", "LASTACTUALDATE"]
+# NOTES and LASTACTUALDATE are a documented divergence: both paths populate
+# them, but from different sources -- the API's
+# METHODOLOGY_NOTES/LATEST_ACTUAL_ANNUAL_DATA metadata sidecar vs. the bulk
+# XML's own NOTES/LASTACTUALDATE series attributes -- so the free text and
+# values differ even when both sides are non-null. Comparing them would fail
+# on every run for a reason unrelated to what this test guards.
+#
+# COUNTRY_UPDATE_DATE is API-only: the bulk archive has no per-country
+# revision date to carry, so its column is always null there while the API
+# path populates it from the same sidecar.
+UNCOMPARABLE_COLUMNS = ["NOTES", "LASTACTUALDATE", "COUNTRY_UPDATE_DATE"]
 
 # UNIT_CODE/UNIT_LABEL are compared only where the API's own raw CSV populates
 # UNIT. For seven concepts whose unit is implicit (LE, LP, LUR, NGDPRPPPPC,

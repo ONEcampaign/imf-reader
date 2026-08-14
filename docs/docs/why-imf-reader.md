@@ -12,9 +12,11 @@ A WEO time series spanning 2019 to today draws on both systems, the bulk archive
 years and the API for the recent ones, each with its own area-code and unit-code vocabulary.
 Something has to reconcile them before the series is usable.
 
-Special Drawing Rights (SDR) data has no API at all. Holdings, allocations, exchange rates, and
-interest rates are published as HTML on IMF web pages built for a browser. Page structure, class
-names, and table layout change whenever the IMF redesigns the site.
+The daily SDR valuation and the weekly interest rate have no API at all; the IMF publishes only
+HTML pages built for a browser. Allocations and holdings do exist on the IMF's API at monthly
+frequency, but this package has not moved to it. All four Special Drawing Rights (SDR) series,
+holdings, allocations, exchange rates, and interest rates, are parsed from HTML. Page structure,
+class names, and table layout change whenever the IMF redesigns the site.
 
 Both surfaces are volatile. The bulk archive already contains two corrupted releases, April 2021
 and October 2023, that fail a CRC-32 check on every re-download. The IMF's codelists and

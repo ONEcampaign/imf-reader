@@ -214,3 +214,34 @@ class TestSDMXParser:
         # Assert that "n/a" and "--" have been replaced with nulls
         for column in result_df.columns:
             assert result_df[column].isnull().any()
+
+    def test_clean_numeric_columns_counts_below_precision_obs(self):
+        """Test that '--' observations are counted and logged, not silently dropped."""
+
+        # OBS_VALUE carries a below-precision "--", an unrelated "n/a", and a real value
+        data_df = pd.DataFrame(
+            {
+                "REF_AREA_CODE": ["1", "2", "3"],
+                "OBS_VALUE": ["--", "n/a", "39.372"],
+                "SCALE_CODE": ["1", "1", "1"],
+                "LASTACTUALDATE": ["2023", "2023", "2023"],
+                "TIME_PERIOD": ["1980", "1981", "1982"],
+            }
+        )
+
+        with patch("imf_reader.weo.parser.logger.debug") as mock_logger:
+            result_df = SDMXParser.clean_numeric_columns(data_df)
+
+        # Only the "--" cell is counted, "n/a" is a separate, unremarkable case
+        mock_logger.assert_called_once_with(
+            "Dropped %d observations published as '--' (below display precision); "
+            "the API path does not carry these cells either",
+            1,
+        )
+
+        # clean_numeric_columns itself only coerces to null; the row is dropped downstream
+        from imf_reader.weo._shared import _drop_empty_observations
+
+        surviving = _drop_empty_observations(result_df)
+        assert len(surviving) == 1
+        assert surviving["OBS_VALUE"].iloc[0] == 39.372

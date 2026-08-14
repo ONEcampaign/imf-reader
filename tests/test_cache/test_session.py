@@ -17,21 +17,18 @@ from imf_reader.cache import reset_cache_dir, set_cache_dir
 
 
 def _mock_dataflow_response():
-    """Return a mock Response with a minimal dataflow JSON payload."""
+    """Return a mock Response serving both the flow-discovery JSON body and
+    the PUBLICATION_DATE probe's CSV body -- the same mocked response object
+    is returned for every make_get_request call in this test, and one bare
+    WEO flow needs exactly one of each."""
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
-        "data": {
-            "dataflows": [
-                {
-                    "version": "9.0.0",
-                    "annotations": [
-                        {"id": "lastUpdatedAt", "value": "2025-10-01T00:00:00Z"}
-                    ],
-                }
-            ]
-        }
+        "data": {"dataflows": [{"id": "WEO", "version": "9.0.0"}]}
     }
+    mock_resp.text = (
+        "COUNTRY,INDICATOR,PUBLICATION_DATE\nUSA,NGDP_RPCH,2025-10-01T00:00:00Z\n"
+    )
     mock_resp.raise_for_status = MagicMock()
     return mock_resp
 
@@ -161,10 +158,11 @@ class TestGetWeoVersionsHttpCaching:
     makes zero HTTP requests."""
 
     def test_get_weo_versions_second_call_no_http(self, tmp_cache_root):
-        """Second get_weo_versions() call must not trigger any HTTP request."""
-        from imf_reader.weo.api import _fetch_version_mapping, get_weo_versions
+        """Second get_weo_versions() call must not trigger any additional HTTP
+        request once the flow mapping is cached."""
+        from imf_reader.weo.api import _fetch_flow_mapping, get_weo_versions
 
-        _fetch_version_mapping.cache_clear()
+        _fetch_flow_mapping.cache_clear()
 
         mock_resp = _mock_dataflow_response()
 
@@ -172,10 +170,12 @@ class TestGetWeoVersionsHttpCaching:
             "imf_reader.weo.api.make_get_request", return_value=mock_resp
         ) as mock_http:
             versions1 = get_weo_versions()
-            assert mock_http.call_count == 1
+            first_call_count = mock_http.call_count
+            assert first_call_count > 0  # discovery + at least one probe
 
             versions2 = get_weo_versions()
-            assert mock_http.call_count == 1  # no additional HTTP call on cache hit
+            # no additional HTTP call on cache hit
+            assert mock_http.call_count == first_call_count
 
         assert versions1 == versions2
 

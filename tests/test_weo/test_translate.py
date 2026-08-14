@@ -225,3 +225,20 @@ class TestToApiVocabulary:
         result = translate.to_api_vocabulary(df)
 
         assert list(result.columns) == OUTPUT_COLUMNS
+
+
+class TestCountryUpdateDate:
+    """The bulk archive has no per-country revision date, so the bulk path's
+    COUNTRY_UPDATE_DATE is always null -- but must still carry the same
+    datetime64[us] dtype the API path's parsed column does (api.py), so the
+    two paths can be concatenated without a dtype mismatch."""
+
+    def test_bulk_path_country_update_date_is_all_null_datetime64_us(self):
+        df = _legacy_frame(
+            [{"REF_AREA_CODE": 111, "UNIT_CODE": "E", "CONCEPT_CODE": "NGDP"}]
+        )
+
+        result = translate.to_api_vocabulary(df)
+
+        assert result["COUNTRY_UPDATE_DATE"].dtype == "datetime64[us]"
+        assert result["COUNTRY_UPDATE_DATE"].isna().all()

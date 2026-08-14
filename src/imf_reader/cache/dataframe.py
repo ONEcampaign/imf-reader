@@ -16,9 +16,24 @@ from typing import Any
 import pandas as pd
 from readerkit import cache_key_for_call
 
+# readerkit internal, used deliberately: this package's artifact cache already
+# depends on the same helper, and readerkit is a sibling released in step.
+from readerkit._atomic import atomic_write
+
 from imf_reader.cache import config as _cfg
 
 logger = logging.getLogger(__name__)
+
+# Consecutive cache-write and cache-read failure counts per cache key, shared
+# across every decorated function. Cache keys already embed module + qualname
+# + call args, so collisions across functions are impossible. No public
+# surface: this is purely to detect a cache that has gone silently and
+# permanently dead. The two counters are independent -- a write success does
+# not clear a read-failure streak and vice versa, since they diagnose
+# different failure modes (nothing persists vs. what persists can't be read
+# back).
+_write_failure_counts: dict[str, int] = {}
+_read_failure_counts: dict[str, int] = {}
 
 
 def dataframe_cache(
@@ -85,17 +100,17 @@ def dataframe_cache(
                 # an attacker able to plant a file there can already run code as
                 # that user by easier routes. JSON would remove the primitive
                 # outright, at the cost of a custom encoding for
-                # _fetch_version_mapping, which caches a dict keyed by
+                # _fetch_flow_mapping, which caches a dict keyed by
                 # (month, year) tuples that JSON cannot round-trip.
                 return pickle.load(f)  # noqa: S301
 
         def _write(path: Path, result: Any) -> None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            if isinstance(result, pd.DataFrame):
-                result.to_parquet(path)
-            else:
-                with path.open("wb") as f:
-                    pickle.dump(result, f)
+            with atomic_write(path) as fh:
+                if isinstance(result, pd.DataFrame):
+                    result.to_parquet(fh)
+                else:
+                    pickle.dump(result, fh)
 
         def _do_cache_clear() -> None:
             """Remove all cached files for this function from the sublayer dir."""
@@ -117,14 +132,95 @@ def dataframe_cache(
             cached = _find_cache_file(key)
             if cached is not None and _is_fresh(cached):
                 logger.debug("Cache hit: %s", cached.name)
-                return _read(cached)
+                try:
+                    result = _read(cached)
+                except Exception as exc:
+                    # A poisoned entry (truncated write, incompatible format, ...)
+                    # is treated as a miss, not an error. Unlinking it matters as
+                    # much as the try: without it, every later call would re-read
+                    # and re-fail against the same file, and only a manual
+                    # clear_cache() would recover. The unlink itself is wrapped
+                    # below because a read-only cache mount or a shared root
+                    # this process doesn't own leaves the entry readable but not
+                    # removable, and PermissionError there is just as
+                    # recoverable as the read failure that got us here.
+                    _read_failure_counts[key] = _read_failure_counts.get(key, 0) + 1
+                    logger.warning(
+                        "Ignoring unreadable cache entry %s: %s: %s",
+                        cached.name,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    if _read_failure_counts[key] >= 2:
+                        # Writes can "succeed" (no exception) yet produce files
+                        # that fail on every subsequent read -- a version skew,
+                        # a partial write that didn't raise, a format
+                        # incompatibility. This is the same invisible-forever
+                        # failure mode as the write-side one above: left as
+                        # ordinary per-call warnings, caching would be
+                        # silently defeated on every call, with nothing but a
+                        # log level bump to surface it.
+                        logger.warning(
+                            "Cache sublayer %r has failed to read back %d "
+                            "times in a row for %s; results are not being "
+                            "served from cache and are being re-fetched on "
+                            "every call.",
+                            sublayer,
+                            _read_failure_counts[key],
+                            key,
+                        )
+                    try:
+                        cached.unlink(missing_ok=True)
+                    except OSError as unlink_exc:
+                        # Left unhandled, this would abort the whole call on a
+                        # directory this process can't write to, even though
+                        # the entry was still readable. Suppressing it here is
+                        # safe, not sloppy: the live call below still runs,
+                        # and its own write into the same directory will hit
+                        # the same non-writable path, which the write-side
+                        # except above already handles, escalation included.
+                        logger.warning(
+                            "Failed to remove unreadable cache entry %s: %s: %s",
+                            cached,
+                            type(unlink_exc).__name__,
+                            unlink_exc,
+                        )
+                    # falls through to the live call below
+                else:
+                    _read_failure_counts.pop(key, None)
+                    return result
 
             result = fn(*args, **kwargs)
             path = _cache_path(key, result)
             try:
                 _write(path, result)
             except Exception as exc:
-                logger.warning("Failed to write cache entry %s: %s", path, exc)
+                _write_failure_counts[key] = _write_failure_counts.get(key, 0) + 1
+                logger.warning(
+                    "Failed to write cache entry %s: %s: %s",
+                    path,
+                    type(exc).__name__,
+                    exc,
+                )
+                if _write_failure_counts[key] >= 2:
+                    # A single failure can be bad luck (disk full for a moment,
+                    # a transient permission glitch). Two in a row for the same
+                    # cache key means the cache is dead, not unlucky -- e.g. a
+                    # pyarrow install that can't write parquet at all, silently
+                    # re-fetching the full payload on every call while the
+                    # package appears to work. Left as an ordinary per-call
+                    # warning, that failure mode is easy to miss, so it gets
+                    # one louder line naming the sublayer.
+                    logger.warning(
+                        "Cache sublayer %r has failed to write %d times in a "
+                        "row for %s; results are not being persisted and are "
+                        "being re-fetched on every call.",
+                        sublayer,
+                        _write_failure_counts[key],
+                        key,
+                    )
+            else:
+                _write_failure_counts.pop(key, None)
             return result
 
         # Attach cache_clear so sdr/clear_cache.py and user code can clear this
