@@ -23,6 +23,16 @@ MAIN_PAGE_URL = "https://www.imf.org/external/np/fin/tad/extsdr1.aspx"
 def read_tsv(url: str) -> pd.DataFrame:
     """Read a tsv file from url and return a dataframe"""
 
+    # The URL goes to pandas, which fetches it with urllib. This endpoint's bot
+    # management accepts urllib's User-Agent and answers the shared session's
+    # with a 403, so routing this through make_request returns no data. The
+    # cost is that this call has no timeout, retry, rate limiting or HTTP
+    # cache, and raises urllib errors where the rest of the package raises
+    # ConnectionError.
+    #
+    # delimiter="/t" is a sequence the data never contains, so read_csv reads
+    # each line whole into one column and clean_df splits it on the real tab.
+    # All three SDR readers parse this way.
     try:
         return pd.read_csv(url, delimiter="/t", engine="python")
 
@@ -87,10 +97,24 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     response = make_request(MAIN_PAGE_URL)
     soup = BeautifulSoup(response.content, "html.parser")
 
-    table = soup.find_all("table")[4]
-    row = table.find_all("tr")[1]
+    # The date lives in the second row of the fifth table. An IMF layout change
+    # is the expected way this breaks, so both positions are bound-checked and
+    # the error names the page and the shape it wanted.
+    tables = soup.find_all("table")
+    if len(tables) < 5:
+        raise ValueError(
+            f"Unexpected SDR page layout at {MAIN_PAGE_URL}: expected at least "
+            f"5 tables, found {len(tables)}"
+        )
 
-    td = row.td
+    rows = tables[4].find_all("tr")
+    if len(rows) < 2:
+        raise ValueError(
+            f"Unexpected SDR page layout at {MAIN_PAGE_URL}: expected at least "
+            f"2 rows in the announcements table, found {len(rows)}"
+        )
+
+    td = rows[1].td
     if td is None:
         raise ValueError("Could not find the latest SDR announcement date in the page")
 
