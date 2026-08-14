@@ -11,18 +11,23 @@ on:
       - "docs/**"
       - ".github/workflows/docs.yml"
       - "pyproject.toml"
+  # No paths filter on pull_request, unlike push above. "Build documentation"
+  # is a required status check on main, and a required check that is filtered
+  # out never reports at all, so every pull request touching nothing under
+  # docs/ would sit on "Expected" and stay unmergeable. The build takes about
+  # 20 seconds, so running it on every pull request is the cheaper half of that
+  # trade.
   pull_request:
     branches: [main]
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
-      - "pyproject.toml"
   workflow_dispatch:
 
 jobs:
   docs:
     runs-on: ubuntu-latest
-    name: Build docs
+    # Must match the required status check configured on main exactly. It is
+    # matched by name, and a mismatch is indistinguishable from a check that
+    # has not reported yet.
+    name: Build documentation
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
