@@ -1,6 +1,5 @@
-"""Tests for reader module"""
-
 import io
+import logging
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -90,43 +89,31 @@ def _build_sdmx_zip_bytes(
 
 
 def test_validate_version():
-    """Test for validate_version function."""
-
-    # Test that the function correctly validates a valid version
     assert reader.validate_version(("April", 2024)) == ("April", 2024)  # April
     assert reader.validate_version(("October", 2024)) == ("October", 2024)  # October
 
-    # Test that the function correctly validates a valid version with different case and leading/trailing spaces
     assert reader.validate_version((" april ", "2024")) == ("April", 2024)
     assert reader.validate_version(("october", " 2024 ")) == ("October", 2024)
     assert reader.validate_version((" apRil ", "2024")) == ("April", 2024)
 
-    # Test that the function raises a TypeError for an invalid month
     with pytest.raises(TypeError):
         reader.validate_version(("March", 2024))
 
-    # Test that the function raises a TypeError for an invalid year
     with pytest.raises(TypeError, match=r"Invalid year\. Must be an integer"):
         reader.validate_version(("April", "twenty twenty four"))
 
-    # Test that the function raises a TypeError for an invalid version format
     with pytest.raises(TypeError):
         reader.validate_version("April 2024")
 
 
 @patch("imf_reader.weo.reader.datetime")
 def test_gen_latest_version(mock_datetime):
-    """Test for gen_latest_version function."""
-
-    # Mock the current date to be in April
     mock_datetime.now.return_value = datetime(2024, 4, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("April", 2024)
 
-    # Mock the current date to be in October
     mock_datetime.now.return_value = datetime(2024, 10, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("October", 2024)
 
-    # Mock the current date to be in January
     mock_datetime.now.return_value = datetime(2024, 1, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("October", 2023)
 
@@ -134,18 +121,13 @@ def test_gen_latest_version(mock_datetime):
 @patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data(mock_get_weo_data, mock_get_weo_versions):
-    """Test for fetch_data method."""
-
-    # Mock the get_weo_data function to return a specific DataFrame
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
     mock_get_weo_data.return_value = mock_data
     mock_get_weo_versions.return_value = [("October", 2025), ("April", 2025)]
 
-    # Test that the function correctly fetches data when a version is passed
     pd.testing.assert_frame_equal(reader.fetch_data(("April", 2024)), mock_data)
     mock_get_weo_data.assert_called_with(("April", 2024))
 
-    # when no version is passed, check that get_weo_versions is called for latest
     mock_get_weo_data.reset_mock()
     reader.fetch_data()
     mock_get_weo_versions.assert_called()
@@ -155,17 +137,13 @@ def test_fetch_data(mock_get_weo_data, mock_get_weo_versions):
 @patch("imf_reader.weo.reader.get_weo_versions")
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data_attribute(mock_get_weo_data, mock_get_weo_versions):
-    """Test for fetch_data method attribute."""
-
     mock_data = pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
     mock_get_weo_data.return_value = mock_data
     mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
-    # when a version is passed, check that the attribute is set
     reader.fetch_data(("April", 2022))
     assert reader.fetch_data.last_version_fetched == ("April", 2022)
 
-    # when no version is passed, check that the attribute is set to latest
     reader.fetch_data()
     assert reader.fetch_data.last_version_fetched == ("April", 2024)
 
@@ -181,26 +159,21 @@ def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
     an already-published, newest-first list -- rather than guess a previous
     release from the calendar, and land on the next version that works."""
 
-    # Mock get_weo_versions to return a specific version list
     mock_get_weo_versions.return_value = [("April", 2024), ("October", 2023)]
 
-    # Mock get_weo_data to raise VersionNotAvailableError (version not in API)
     mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
 
-    # Mock the _fetch function to raise a NoDataError for the first call and return a DataFrame for the second call
     mock_fetch.side_effect = [
         NoDataError,
         pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]}),
     ]
 
-    # Call the fetch_data function without passing a version
     df = reader.fetch_data()
 
-    # Check that get_weo_versions was called to get latest version
     mock_get_weo_versions.assert_called()
 
-    # Check that _fetch was called twice (once for the initial call and once
-    # after rolling back to the next entry in get_weo_versions())
+    # _fetch is called twice: once for the initial resolved version and once
+    # after rolling back to the next entry in get_weo_versions().
     assert mock_fetch.call_count == 2
     mock_fetch.assert_any_call(("April", 2024))
     mock_fetch.assert_any_call(("October", 2023))
@@ -208,7 +181,6 @@ def test_fetch_data_rolls_back_through_get_weo_versions_when_latest_fails(
     # The rolled-back version is what fetch_data actually served.
     assert reader.fetch_data.last_version_fetched == ("October", 2023)
 
-    # Check that the DataFrame returned by fetch_data is as expected
     pd.testing.assert_frame_equal(
         df, pd.DataFrame({"column1": [1, 2, 3], "column2": [4, 5, 6]})
     )
@@ -220,9 +192,9 @@ def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
     mock_get_weo_data, mock_scrape, cache_disabled
 ):
     """An explicit version that neither the API nor the bulk scraper can serve
-    must raise, never quietly roll back and return a different release under
-    the caller's requested label. Roll-back is only for an unresolved
-    version=None request."""
+    raises, never falling back to a different release under the caller's
+    requested label. Roll-back is only for an unresolved version=None
+    request."""
 
     mock_get_weo_data.side_effect = VersionNotAvailableError("Version not available")
     mock_scrape.side_effect = NoDataError("no data")
@@ -235,10 +207,10 @@ def test_fetch_data_explicit_version_raises_instead_of_rolling_back(
 
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data_explicit_version_propagates_non_version_error(mock_get_weo_data):
-    """A failure inside the API path that is not VersionNotAvailableError --
-    a pandas parse error, an _align_schema bug, a codelist problem -- must
-    surface as-is, never be mistaken for 'this version isn't served' and
-    silently rerouted to the bulk scraper or another release."""
+    """Any API-path error other than VersionNotAvailableError -- a pandas
+    parse error, an _align_schema bug, a codelist problem -- surfaces as-is,
+    rather than being mistaken for 'this version isn't served' and rerouted
+    to the bulk scraper or another release."""
 
     mock_get_weo_data.side_effect = ValueError("boom")
 
@@ -288,21 +260,33 @@ def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
 @patch("imf_reader.weo.reader._fetch")
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data_explicit_version_fallback_logs_a_warning(
-    mock_get_weo_data, mock_fetch, caplog
+    mock_get_weo_data, mock_fetch, caplog, monkeypatch
 ):
-    """The catalogue-unusable fallback degrades silently in its return value
-    (the label stays correct), but must still carry a signal above INFO:
-    without a warning, a broken catalogue schema would reroute every
-    explicit-version call in a process with nothing to show for it."""
+    """The catalogue-unusable fallback keeps the caller's label correct, so its
+    return value alone shows nothing. It must still carry a signal above INFO:
+    a broken catalogue schema would otherwise reroute every explicit-version
+    call in a process with nothing to show for it."""
 
     mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
     mock_fetch.return_value = pd.DataFrame({"column1": [1], "column2": [2]})
 
-    with caplog.at_level("WARNING", logger="imf_reader"):
+    # config.py turns propagation off on this logger so a caller configuring
+    # the root logger does not get duplicate lines. caplog attaches to the
+    # root, so it is turned back on for the duration of this test. Capturing
+    # by logger name alone works only on pytest 9.1 and up.
+    imf_logger = logging.getLogger("imf_reader.config")
+    monkeypatch.setattr(imf_logger, "propagate", True)
+
+    with caplog.at_level(logging.WARNING, logger="imf_reader.config"):
         reader.fetch_data(("April", 2020))
 
-    assert len(caplog.records) == 1
-    message = caplog.records[0].getMessage()
+    # Compared as a set of distinct messages, because pytest 9.1 records the
+    # same line twice (once directly, once through the propagation enabled
+    # above) while 9.0 records it once. What this pins is that the fallback
+    # emits one warning, not how many handlers observed it.
+    messages = {r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING}
+    assert len(messages) == 1
+    message = messages.pop()
     assert "April" in message
     assert "2020" in message
     assert "DataflowDiscoveryError" in message
@@ -313,11 +297,11 @@ def test_fetch_data_explicit_version_fallback_logs_a_warning(
 def test_fetch_data_none_propagates_discovery_error_instead_of_archive_fallback(
     mock_get_weo_versions,
 ):
-    """An unresolved version=None request must never reach the bulk-archive
-    fallback when the catalogue is unusable: get_weo_versions() (which
-    fetch_data consults first to resolve 'latest') raises the same error, so
-    fetch_data fails loudly instead of silently serving an archive release
-    mislabelled as latest."""
+    """An unresolved version=None request fails loudly when the catalogue is
+    unusable: get_weo_versions() (which fetch_data consults first to resolve
+    'latest') raises the same error, instead of reaching the bulk-archive
+    fallback and silently serving an archive release mislabelled as
+    latest."""
 
     mock_get_weo_versions.side_effect = DataflowDiscoveryError("catalogue unusable")
 

@@ -37,16 +37,16 @@ print(df.head(3))
 **Output:**
 
 ```
-(361733, 15)
-  UNIT_CODE CONCEPT_CODE REF_AREA_CODE  REF_AREA_IMF_CODE FREQ_CODE  LASTACTUALDATE  SCALE_CODE NOTES  TIME_PERIOD  OBS_VALUE UNIT_LABEL                                           CONCEPT_LABEL                     REF_AREA_LABEL FREQ_LABEL SCALE_LABEL
-0       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         1999  -0.435363  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
-1       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         2000   0.212542  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
-2       USD          BCA           ABW                314         A            <NA>  1000000000  <NA>         2001   0.310076  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions
+(361733, 16)
+  UNIT_CODE CONCEPT_CODE REF_AREA_CODE  REF_AREA_IMF_CODE FREQ_CODE  LASTACTUALDATE  SCALE_CODE NOTES  TIME_PERIOD  OBS_VALUE UNIT_LABEL                                           CONCEPT_LABEL                     REF_AREA_LABEL FREQ_LABEL SCALE_LABEL COUNTRY_UPDATE_DATE
+0       USD          BCA           ABW                314         A            2024  1000000000  <NA>         1999  -0.435363  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
+1       USD          BCA           ABW                314         A            2024  1000000000  <NA>         2000   0.212542  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
+2       USD          BCA           ABW                314         A            2024  1000000000  <NA>         2001   0.310076  US dollar  Current account balance (credit less debit), US dollar  Aruba, Kingdom of the Netherlands     Annual    Billions          2025-09-19
 ```
 
-That's the October 2025 release: 210 areas, 145 concepts, `TIME_PERIOD` spanning 1980-2031
-(WEO releases carry projections alongside actuals). The frame is long-format, one row per area,
-concept, and year, with typed columns throughout.
+That's the April 2026 release, `TIME_PERIOD` spanning 1980-2031 (WEO releases carry projections
+alongside actuals). The frame is long-format, one row per area, concept, and year, with typed
+columns throughout.
 
 ## Filter to one indicator
 
@@ -94,7 +94,7 @@ print(weo.fetch_data.last_version_fetched)
 **Output:**
 
 ```
-('October', 2025)
+('April', 2026)
 ```
 
 To see every release available to fetch, call `get_weo_versions()`:
@@ -108,7 +108,7 @@ print(weo.get_weo_versions())
 **Output:**
 
 ```
-[('October', 2025), ('April', 2025), ('October', 2024), ('April', 2024), ('April', 2023), ('October', 2022), ('April', 2022), ('October', 2021), ('October', 2020), ('April', 2020), ('October', 2019), ('April', 2019)]
+[('April', 2026), ('October', 2025), ('April', 2025), ('October', 2024), ('April', 2024), ('April', 2023), ('October', 2022), ('April', 2022), ('October', 2021), ('October', 2020), ('April', 2020), ('October', 2019), ('April', 2019)]
 ```
 
 `('April', 2021)` and `('October', 2023)` are missing from that list. Both are corrupted in the
@@ -136,6 +136,7 @@ period. It defaults to `unit_basis="SDR"`, giving 1 SDR expressed in USD. Pass
 available. Pass a specific month as a `(year, month)` tuple.
 
 !!! warning "Heads up"
+
     SDR and WEO order their date arguments differently. `sdr.fetch_allocations_holdings((2021, 4))` takes `(year, month)` as integers, for April 2021. `weo.fetch_data(("April", 2021))` takes `(month, year)`, with the month as a name. Check which module you're calling before passing a tuple.
 
 ## What just happened

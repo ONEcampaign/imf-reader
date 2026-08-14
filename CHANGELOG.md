@@ -1,14 +1,17 @@
 # Changelog
 
-## Unreleased
+## v2.1.0 (2026-08-14)
 
-- **Raised the `pandas` and `pyarrow` floors to `pandas>=3.0.0` and `pyarrow>=16.0`.** The previous
-  floors (`pandas>=2.2.2`, `pyarrow>=14.0`) did not work: installing at them fails 12 tests. pyarrow
-  14 was built against numpy 1.x and cannot import alongside numpy 2 at all, which made every
-  parquet cache write fail silently and turned the disk cache into a no-op. Nothing that worked
-  before stops working — the old floors resolved to an installation that was already broken — but
-  the declared range is narrower, so this warrants a version bump rather than a patch release.
-  A new CI job installs at `--resolution lowest-direct` so the floors stay a tested claim.
+- **Raised the `pyarrow` floor to `pyarrow>=16.0`.** pyarrow 14 was built against numpy 1.x and
+  cannot import alongside numpy 2 at all, which made every parquet cache write fail silently and
+  turned the disk cache into a no-op. The `pandas` floor stays at `pandas>=2.2.2`. The package's
+  pandas usage is confined to APIs available in pandas 2, and pandas 2.2.2 was checked against the
+  live IMF API to return the same frame as pandas 3.0.5, with the same 16 columns in the same
+  order, the same dtypes and the same values.
+- The `dependency floors (lowest-direct)` CI job tested the newest resolution rather than the
+  declared minimums, so the floors were never a tested claim. `uv run` re-resolves from the
+  lockfile, so the step after `uv sync --resolution lowest-direct` reinstalled the newest versions
+  before running the suite. It now runs `uv run --no-sync`.
 - Fixed a latent crash in `utils._raise_connection_error`, which read `.status_code` off
   `HTTPError.response` without checking it for `None`.
 - `weo.gen_latest_version()` now takes a single UTC reading of the clock instead of two local ones.
@@ -19,34 +22,37 @@
 - The package now ships a `py.typed` marker, so downstream type checkers see its annotations
   instead of silently ignoring them.
 - Removed the Codecov integration.
+- The documentation site moved from Sphinx to MkDocs and was rewritten, and now covers WEO release
+  coverage, the SDR argument-order trap, and the caching layer. It is published at
+  <https://docs.one.org/tools/imf-reader/>.
 
 ### Corrected data
 
 - `weo.fetch_data()` and `weo.fetch_data(("October", 2025))` both returned the same underlying
-  data — the April 2026 release, labelled as October 2025. Version resolution keyed off a
+  data, the April 2026 release labelled as October 2025. Version resolution keyed off a
   dataflow's `lastUpdatedAt` structure annotation, which is inverted on the IMF's live WEO
   dataflows, instead of reading `PUBLICATION_DATE` from the data itself.
   `fetch_data(("October", 2025))` now returns the actual October 2025 release, served from a
   separate `WEO_2025_OCT_VINTAGE` dataflow the IMF publishes for it: 354,240 rows (previously
   361,733), `TIME_PERIOD` reaching 2030 (previously 2031), and 35.1% of overlapping observations
-  differ from what was previously returned by more than rounding — e.g. world real GDP growth for
+  differ from what was previously returned by more than rounding, e.g. world real GDP growth for
   2025 is now 3.163, what the IMF actually published for the October 2025 WEO, not 3.441.
   `weo.get_weo_versions()` gains `("April", 2026)`, and `fetch_data()` with no argument now
   correctly resolves to it.
 - If you're on an editable or git install, run `imf_reader.cache.clear_cache()` after upgrading.
-  The cache directory is scoped by installed version; an editable/git install stays inside the same
+  The cache directory is scoped by installed version. An editable or git install stays inside the same
   version segment across this change, so a cache entry written before this fix can otherwise keep
   serving the mislabelled data. If you have an extract saved to disk and labelled "October 2025",
-  re-pull it — it may hold the April 2026 release under the wrong label. See
+  re-pull it. It may hold the April 2026 release under the wrong label. See
   [Caching](https://docs.one.org/tools/imf-reader/caching/) for detail.
 
 ### New and repaired columns
 
 - `LASTACTUALDATE` and `NOTES`, previously always null on every API-served release (April 2025
   onward), are now populated. `LASTACTUALDATE` comes from a per-series metadata sidecar's
-  `LATEST_ACTUAL_ANNUAL_DATA` field; fiscal-year forms such as `FY2023/24` are collapsed to their
-  leading year, `2023` (about 10.7% of series) — this discards the fiscal-year distinction rather
-  than encoding it, and there's no way back from `LASTACTUALDATE` alone (see "Known gotchas"
+  `LATEST_ACTUAL_ANNUAL_DATA` field. Fiscal-year forms such as `FY2023/24` are collapsed to their
+  leading year, `2023` (about 10.7% of series). This discards the fiscal-year distinction, and
+  there's no way back from `LASTACTUALDATE` alone (see "Known gotchas"
   below). `NOTES` comes from the same sidecar's `METHODOLOGY_NOTES` field, which is different free
   text from the bulk archive's `NOTES` column.
 - A new column, `COUNTRY_UPDATE_DATE` (`datetime64[us]`), carries the date each country's data was
@@ -54,23 +60,21 @@
   bulk archive's XML carries no per-country revision date). It's appended after `SCALE_LABEL`, so
   the first 15 columns, and any positional access to them, are unaffected.
 - If the metadata sidecar request fails, all three columns fall back to null for that call and a
-  warning is logged, rather than failing the fetch.
+  warning is logged.
 
 ### Known gotchas
 
 - **`LASTACTUALDATE`'s fiscal-year mapping is lossy and one-way.** `FY2023/24` becomes `2023`,
-  and the fiscal-year distinction is gone — not encoded, not recoverable from this column. Don't
-  read `2023` as "reported as of calendar year 2023"; the leading-year convention only
-  approximates that. If the fiscal-year boundary matters, read
-  `START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API directly — this package does not expose
-  it.
+  discarding the fiscal-year distinction with no way to recover it from this column. `2023` only
+  approximates "reported as of calendar year 2023" under the leading-year convention. If the
+  fiscal-year boundary matters, read `START_END_MONTHS_OF_REPORTING_YEAR` from the IMF API
+  directly, outside what this package returns.
 - **`NOTES` silently mixes two vocabularies across the April 2025 boundary, with no column to tell
-  them apart.** Before April 2025 it's the bulk archive's `NOTES`; from April 2025 it's the API's
-  `METHODOLOGY_NOTES` — different free text, describing different things. None of the 16 columns
-  marks the boundary. We're deliberately not adding a provenance column for this release. If you
-  concatenate releases and do text search, deduplication, or NLP over `NOTES`, split on the
-  release version you requested (or `weo.fetch_data.last_version_fetched`) first, rather than
-  treating `NOTES` as one corpus.
+  them apart.** Before April 2025 it's the bulk archive's `NOTES`. From April 2025 it's the API's
+  `METHODOLOGY_NOTES`, which is different free text describing different things. None of the 16 columns
+  marks the boundary. If you concatenate releases and do text search, deduplication, or NLP over
+  `NOTES`, split on the release version you requested (or `weo.fetch_data.last_version_fetched`)
+  first rather than treating `NOTES` as one corpus.
 
 ### Other behaviour changes
 
@@ -84,7 +88,7 @@
   cache. A cache entry that fails to read is now treated as a miss and removed, rather than failing
   every subsequent call until a manual `clear_cache()`.
 - Bulk-archive observations published as `--` (below display precision, not zero) continue to be
-  dropped rather than written as `0.0` or flagged with a status column; the count dropped is now
+  dropped rather than written as `0.0` or flagged with a status column. The count dropped is now
   logged at `debug`.
 - A dataflow catalogue that responds successfully but carries no usable WEO dataflow now raises
   `DataflowDiscoveryError`. Previously that response produced an empty version mapping, which was
@@ -98,6 +102,11 @@
 - Removing an unreadable cache entry no longer fails the call. On a read-only or shared cache
   directory the removal raised `PermissionError` out of the cache layer, so a recoverable cache
   miss became a hard error. The failure is logged and the live fetch proceeds.
+- `sdr.fetch_latest_allocations_holdings_date()` raises `ValueError` naming the page and the layout
+  it expected when the IMF changes that page. It previously indexed into the fifth table and the
+  second row unguarded, so a layout change surfaced as a bare `IndexError` that named neither.
+- Labelling the four legacy-only aggregates no longer emits a pandas `FutureWarning` on pandas 2,
+  which mattered to anyone running with warnings as errors.
 
 ## v2.0.1 (2026-08-13)
 

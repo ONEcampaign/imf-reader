@@ -287,7 +287,7 @@ wheels = [
 
 [[package]]
 name = "imf-reader"
-version = "2.0.1"
+version = "2.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -312,7 +312,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
-    { name = "pandas", specifier = ">=3.0.0" },
+    { name = "pandas", specifier = ">=2.2.2" },
     { name = "pyarrow", specifier = ">=16.0" },
     { name = "readerkit", specifier = ">=0.1.0" },
     { name = "requests", specifier = ">=2.32.1" },

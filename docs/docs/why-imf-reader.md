@@ -14,14 +14,14 @@ Something has to reconcile them before the series is usable.
 
 The daily SDR valuation and the weekly interest rate have no API at all; the IMF publishes only
 HTML pages built for a browser. Allocations and holdings do exist on the IMF's API at monthly
-frequency, but this package has not moved to it. All four Special Drawing Rights (SDR) series,
-holdings, allocations, exchange rates, and interest rates, are parsed from HTML. Page structure,
-class names, and table layout change whenever the IMF redesigns the site.
+frequency, but this package parses them from HTML too. All four Special Drawing Rights (SDR)
+series, holdings, allocations, exchange rates, and interest rates, are parsed from HTML. Page
+structure, class names, and table layout change whenever the IMF redesigns the site.
 
 Both surfaces are volatile. The bulk archive already contains two corrupted releases, April 2021
-and October 2023, that fail a CRC-32 check on every re-download. The IMF's codelists and
-observation columns have changed between releases (`NOTES` and `LASTACTUALDATE` hold nulls on
-every row from October 2025 on).
+and October 2023, that fail a CRC-32 check on every re-download. The IMF's codelists have changed
+between releases, and per-series metadata such as the last actual date and revision notes lives
+behind a separate request that can fail on its own, independently of the main data fetch.
 
 ## What this package does about it
 
@@ -32,11 +32,13 @@ same column names and the same codes throughout, with no branch for which system
 year.
 
 Every fetch is cached to disk. If the IMF's SDR pages are unreachable or the API returns an
-error, already-cached data keeps working. Requesting a release the IMF has not published yet
-triggers an automatic rollback to the closest earlier release (October falls back to April of the
-same year, April falls back to October of the year before) and logs the substitution at INFO. The
-two corrupt bulk releases behave differently. Fetching one raises `cache.BulkPayloadCorruptError`,
-flagged `is_retryable=False` so a retry loop can skip it.
+error, already-cached data keeps working. Requesting the latest release when the IMF has not
+published it yet triggers a bounded rollback. `fetch_data()` walks the published releases
+newest-first and tries up to three of them, logging each attempt as a warning. Requesting a
+specific release always resolves to that release or raises. If the API can't serve it,
+`fetch_data` falls back to the bulk archive for that same release before raising. The two corrupt bulk
+releases behave differently. Fetching one raises `cache.BulkPayloadCorruptError`, flagged
+`is_retryable=False` so a retry loop can skip it.
 
 All output is typed pandas, with nullable `Int64`, `Float64`, and `string` dtypes throughout,
 ready for filtering and arithmetic without a casting step.
@@ -60,8 +62,9 @@ means writing and maintaining that script yourself.
 - The bulk WEO archive ends at April 2025, the release after which the IMF discontinued it. Two
   of its releases, April 2021 and October 2023, are permanently corrupt and cannot be fetched by
   any means.
-- `NOTES` and `LASTACTUALDATE` are populated only for releases before October 2025. Both columns
-  are still present on later releases, holding nulls throughout.
+- `NOTES`, `LASTACTUALDATE`, and `COUNTRY_UPDATE_DATE` on API-era releases come from a separate
+  per-series metadata request. If that request fails, all three columns come back null for that
+  call. See [WEO coverage and known issues](weo-coverage.md) for the full column reference.
 - WEO frequency is annual, one release each in April and October. There is no quarterly or
   monthly WEO data to fetch.
 
