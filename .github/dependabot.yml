@@ -3,13 +3,12 @@ version: 2
 updates:
   # Direct dependencies, via pyproject.toml + uv.lock.
   #
-  # Caveat worth knowing before trusting this alone: Dependabot's uv support
-  # updates the dependencies declared in pyproject.toml, but transitive-only
-  # entries in uv.lock are frequently left alone even when `uv lock --upgrade`
-  # would bump them (dependabot/dependabot-core#14073). Every security alert
-  # this repo has received so far has been against a transitive package
-  # (soupsieve, urllib3, idna), none of which is declared here. lock-refresh.yml
-  # is what actually keeps those current; this block covers the declared set.
+  # Dependabot's uv support updates the dependencies declared in
+  # pyproject.toml and leaves transitive-only entries in uv.lock alone, even
+  # where `uv lock --upgrade` would bump them
+  # (dependabot/dependabot-core#14073). Every security alert this repo has
+  # received has been against a transitive package (soupsieve, urllib3, idna),
+  # so lock-refresh.yml carries those and this block carries the declared set.
   - package-ecosystem: "uv"
     directory: "/"
     schedule:

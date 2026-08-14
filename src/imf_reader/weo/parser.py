@@ -156,14 +156,14 @@ class SDMXParser:
 
         SDMXParser.check_folder(sdmx_folder)
 
-        # S314: ElementTree is not hardened against entity-expansion attacks
-        # (billion laughs). Accepted here rather than pulled onto defusedxml:
-        # these bytes come from a hardcoded imf.org HTTPS URL, arrive inside a
-        # zip whose CRC-32 and Content-Length are validated before this point,
-        # and are never caller-supplied. Reaching this parser with hostile XML
-        # requires control of imf.org or of the TLS connection, and an attacker
-        # holding either can do considerably worse than exhaust memory here.
-        # Revisit if this parser is ever pointed at a caller-supplied source.
+        # S314: ElementTree is vulnerable to entity-expansion attacks (billion
+        # laughs), and defusedxml would close that off. The risk is accepted
+        # because these bytes come from a hardcoded imf.org HTTPS URL and
+        # arrive inside a zip whose CRC-32 and Content-Length are validated
+        # before this point. Reaching this parser with hostile XML requires
+        # control of imf.org or of the TLS connection, and an attacker holding
+        # either can do worse than exhaust memory here. Revisit if this parser
+        # is ever pointed at a caller-supplied source.
         data_tree = ET.parse(  # noqa: S314
             sdmx_folder.open(
                 next(f for f in sdmx_folder.namelist() if f.endswith(".xml"))

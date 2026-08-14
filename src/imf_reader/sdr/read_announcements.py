@@ -94,10 +94,9 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     if td is None:
         raise ValueError("Could not find the latest SDR announcement date in the page")
 
-    # DTZ007: the page renders a bare calendar date ("March 31, 2025") with no
-    # time or offset in it. There is no zone to parse, and attaching one would
-    # invent precision the source does not have, so it is parsed and reduced to
-    # a date — only the year and month are ever read from it.
+    # DTZ007: the page renders a bare calendar date ("March 31, 2025"), so
+    # there is no zone to parse and attaching one would invent precision the
+    # source lacks. Reduced to a date, of which only the year and month are read.
     parsed = datetime.strptime(td.text.strip(), "%B %d, %Y").date()  # noqa: DTZ007
 
     return parsed.year, parsed.month

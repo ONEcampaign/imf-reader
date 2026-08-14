@@ -61,11 +61,10 @@ version_toml = [
 ]
 build_command = "pip install uv && uv build"
 
-# `branch` and `changelog_file` used to live directly above. Both moved:
-# the release branch to a `branches.<name>` table, and `changelog_file` to
-# `changelog.default_templates` (deprecated in v9.11.0). Left at the top level
-# they are simply ignored, so the branch restriction and the changelog path
-# silently fall back to defaults.
+# The release branch belongs in a `branches.<name>` table and `changelog_file`
+# under `changelog.default_templates` (moved in v9.11.0). At the top level of
+# `[tool.semantic_release]` both keys are ignored, and the branch restriction
+# and changelog path silently fall back to defaults.
 [tool.semantic_release.branches.main]
 match = "main"
 

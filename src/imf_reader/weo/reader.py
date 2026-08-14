@@ -52,10 +52,10 @@ def gen_latest_version() -> Version:
         A tuple of the latest month and year
     """
 
-    # One UTC reading, not two local ones. Two separate now() calls can straddle
-    # midnight on 31 December and pair a year with the following year's month;
-    # UTC keeps the answer independent of where the caller happens to be, since
-    # what is being inferred is the IMF's publication schedule, not local time.
+    # A single reading, because two now() calls can straddle midnight on 31
+    # December and pair a year with the following year's month. UTC keeps the
+    # answer independent of the caller's location, since what is inferred here
+    # is the IMF's publication schedule.
     now = datetime.now(tz=UTC)
     current_year = now.year
     current_month = now.month

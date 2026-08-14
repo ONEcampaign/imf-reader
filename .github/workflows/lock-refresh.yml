@@ -1,10 +1,9 @@
 # Weekly `uv lock --upgrade`, opened as a PR.
 #
-# This exists because Dependabot's uv ecosystem does not reliably bump
-# transitive-only entries in uv.lock (dependabot/dependabot-core#14073), and
-# every security alert this repo has received has been against a transitive
-# package. dependabot.yml covers the declared dependencies; this covers the
-# rest of the resolution.
+# Dependabot's uv ecosystem leaves transitive-only entries in uv.lock alone
+# (dependabot/dependabot-core#14073), and every security alert this repo has
+# received has been against a transitive package. dependabot.yml covers the
+# declared dependencies. This covers the rest of the resolution.
 
 name: lock-refresh
 
