@@ -53,11 +53,14 @@ def to_api_vocabulary(df: pd.DataFrame) -> pd.DataFrame:
 
     # The codelist has no entry for the four legacy-only aggregates (e.g.
     # G406); fall back to their zip-derived labels for those.
+    # Both sides are cast to "string" before the fill because .map returns
+    # object dtype on pandas 2, and filling an object column there infers a
+    # downcast and warns. Casting first keeps the fill inside StringDtype.
     df["REF_AREA_LABEL"] = (
         df["REF_AREA_CODE"]
         .map(country_labels)
-        .fillna(df["REF_AREA_CODE"].map(LEGACY_ONLY_AREA_LABELS))
         .astype("string")
+        .fillna(df["REF_AREA_CODE"].map(LEGACY_ONLY_AREA_LABELS).astype("string"))
     )
     df["UNIT_LABEL"] = df["UNIT_CODE"].map(unit_labels).astype("string")
     df["CONCEPT_LABEL"] = df["CONCEPT_CODE"].map(indicator_labels).astype("string")

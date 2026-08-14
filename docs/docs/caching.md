@@ -31,12 +31,16 @@ print(cache.get_cache_dir())
 
 ## How long entries live
 
-| Data                                                      | TTL    |
-| --------------------------------------------------------- | ------ |
-| WEO data                                                  | 7 days |
-| WEO version mapping                                       | 1 hour |
-| SDR holdings, allocations, exchange rates, interest rates | 7 days |
-| SDR latest-available-date lookup                          | 1 day  |
+| Data                                                                   | TTL    |
+| ---------------------------------------------------------------------- | ------ |
+| WEO observations                                                       | 7 days |
+| WEO series metadata (`LASTACTUALDATE`, `NOTES`, `COUNTRY_UPDATE_DATE`) | 7 days |
+| WEO version mapping                                                    | 1 hour |
+| SDR holdings, allocations, exchange rates, interest rates              | 7 days |
+| SDR latest-available-date lookup                                       | 1 day  |
+
+WEO series metadata is cached separately from WEO observations, so a failed metadata request
+doesn't invalidate or degrade the already-cached observations.
 
 ## Redirect the cache
 

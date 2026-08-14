@@ -67,4 +67,8 @@ jobs:
         run: uv sync --resolution lowest-direct
 
       - name: Test with pytest
-        run: uv run pytest tests/
+        # --no-sync is load-bearing. A bare `uv run` re-resolves from the
+        # lockfile and reinstalls the newest versions, undoing the sync above,
+        # which leaves this job testing the same resolution as every other job
+        # while still reporting green.
+        run: uv run --no-sync pytest tests/

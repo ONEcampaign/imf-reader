@@ -1,6 +1,6 @@
 [project]
 name = "imf-reader"
-version = "2.0.1"
+version = "2.1.0"
 description = "A package to access imf data"
 authors = [{ name = "The ONE Campaign" }]
 license = "MIT"
@@ -30,7 +30,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pandas>=3.0.0",
+    "pandas>=2.2.2",
     "requests>=2.32.1",
     "beautifulsoup4>=4.12.3",
     "pyarrow>=16.0",

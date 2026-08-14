@@ -38,7 +38,7 @@ from imf_reader import weo
 df = weo.fetch_data(("April", 2024))
 ```
 
-The `version` argument is a `(month, year)` tuple, month first. The month must be `"April"` or `"October"`, matching the IMF's twice-yearly release schedule. An invalid version raises `NoDataError`.
+The `version` argument is a `(month, year)` tuple, month first. The month must be `"April"` or `"October"`, matching the IMF's twice-yearly release schedule. An invalid version raises `NoDataError`. See [Errors](#errors) below for where to import it from and what else `fetch_data` can raise.
 
 ## List available releases
 
@@ -78,10 +78,10 @@ weo.fetch_data.last_version_fetched
     If the release you asked for has no data yet, `fetch_data()` rolls back: for `version=None`
     ("latest"), it walks `get_weo_versions()` newest-first and tries up to 3 older releases,
     logging each attempt at WARNING. An explicit version (e.g. `fetch_data(("October", 2025))`)
-    never rolls back — if it can't be served, `fetch_data` raises instead of returning a
-    different release under your requested label. The version you asked for and the version you
-    got can differ only for `version=None`; check `last_version_fetched` when the exact release
-    matters.
+    never rolls back to a different release. If the API can't serve it, `fetch_data` falls back
+    to the bulk archive for that same version first (logging a warning), and only raises if the
+    archive can't serve it either. The version you asked for and the version you got can differ
+    only for `version=None`; check `last_version_fetched` when the exact release matters.
 
 ## Filter the frame
 
@@ -133,7 +133,7 @@ CONCEPT_CODE                                                                    
          GGX                                 Expenditure, General government, Domestic currency
 ```
 
-The October 2025 release covers 145 concepts across 210 areas, with `TIME_PERIOD` spanning 1980 to 2031.
+The April 2026 release covers 145 concepts across 210 areas, with `TIME_PERIOD` spanning 1980 to 2031.
 
 ## Columns
 
@@ -159,6 +159,25 @@ The 16 columns below are identical in name, order, and meaning on both source pa
 | `COUNTRY_UPDATE_DATE` | datetime64[us] | Date the country's data was last revised. From the API path's metadata sidecar; always null on the bulk path (no per-country revision date in the XML)                                                                                                                                                                                                                                                                                 |
 
 See [WEO coverage and known issues](weo-coverage.md) for where these columns have gaps or quirks.
+
+## Errors
+
+All three are importable from `imf_reader.config`:
+
+```python
+from imf_reader.config import DataflowDiscoveryError, NoDataError, VersionNotAvailableError
+```
+
+- `NoDataError`, the base exception for "no WEO data could be resolved". Raised directly for an
+  invalid `version` argument, and is the parent class of the two below, so catching it covers
+  every case.
+- `VersionNotAvailableError(NoDataError)`, raised when the requested version isn't served by the
+  API. The bulk archive may still have it.
+- `DataflowDiscoveryError(NoDataError)`, raised when the IMF's dataflow catalogue responds but
+  carries no usable WEO dataflow, so no release, including "latest", can be resolved from it.
+
+Unlike `cache.BulkPayloadCorruptError`, none of these three are re-exported from `imf_reader.cache`;
+import them from `imf_reader.config`.
 
 ## Clearing the cache
 

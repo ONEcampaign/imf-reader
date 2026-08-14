@@ -1,6 +1,7 @@
 """Tests for reader module"""
 
 import io
+import logging
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -288,21 +289,33 @@ def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
 @patch("imf_reader.weo.reader._fetch")
 @patch("imf_reader.weo.reader.get_weo_data")
 def test_fetch_data_explicit_version_fallback_logs_a_warning(
-    mock_get_weo_data, mock_fetch, caplog
+    mock_get_weo_data, mock_fetch, caplog, monkeypatch
 ):
-    """The catalogue-unusable fallback degrades silently in its return value
-    (the label stays correct), but must still carry a signal above INFO:
-    without a warning, a broken catalogue schema would reroute every
-    explicit-version call in a process with nothing to show for it."""
+    """The catalogue-unusable fallback keeps the caller's label correct, so its
+    return value alone shows nothing. It must still carry a signal above INFO:
+    a broken catalogue schema would otherwise reroute every explicit-version
+    call in a process with nothing to show for it."""
 
     mock_get_weo_data.side_effect = DataflowDiscoveryError("catalogue unusable")
     mock_fetch.return_value = pd.DataFrame({"column1": [1], "column2": [2]})
 
-    with caplog.at_level("WARNING", logger="imf_reader"):
+    # config.py turns propagation off on this logger so a caller configuring
+    # the root logger does not get duplicate lines. caplog attaches to the
+    # root, so it is turned back on for the duration of this test. Capturing
+    # by logger name alone works only on pytest 9.1 and up.
+    imf_logger = logging.getLogger("imf_reader.config")
+    monkeypatch.setattr(imf_logger, "propagate", True)
+
+    with caplog.at_level(logging.WARNING, logger="imf_reader.config"):
         reader.fetch_data(("April", 2020))
 
-    assert len(caplog.records) == 1
-    message = caplog.records[0].getMessage()
+    # Compared as a set of distinct messages, because pytest 9.1 records the
+    # same line twice (once directly, once through the propagation enabled
+    # above) while 9.0 records it once. What this pins is that the fallback
+    # emits one warning, not how many handlers observed it.
+    messages = {r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING}
+    assert len(messages) == 1
+    message = messages.pop()
     assert "April" in message
     assert "2020" in message
     assert "DataflowDiscoveryError" in message

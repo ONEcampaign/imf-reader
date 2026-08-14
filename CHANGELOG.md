@@ -1,14 +1,16 @@
 # Changelog
 
-## Unreleased
+## v2.1.0 (2026-08-14)
 
-- **Raised the `pandas` and `pyarrow` floors to `pandas>=3.0.0` and `pyarrow>=16.0`.** The previous
-  floors (`pandas>=2.2.2`, `pyarrow>=14.0`) did not work: installing at them fails 12 tests. pyarrow
-  14 was built against numpy 1.x and cannot import alongside numpy 2 at all, which made every
-  parquet cache write fail silently and turned the disk cache into a no-op. Nothing that worked
-  before stops working — the old floors resolved to an installation that was already broken — but
-  the declared range is narrower, so this warrants a version bump rather than a patch release.
-  A new CI job installs at `--resolution lowest-direct` so the floors stay a tested claim.
+- **Raised the `pyarrow` floor to `pyarrow>=16.0`.** pyarrow 14 was built against numpy 1.x and
+  cannot import alongside numpy 2 at all, which made every parquet cache write fail silently and
+  turned the disk cache into a no-op. The `pandas` floor stays at `pandas>=2.2.2`: the package uses
+  no pandas 3 API, and pandas 2.2.2 was checked against the live IMF API to return the same frame
+  as pandas 3.0.5, with the same 16 columns in the same order, the same dtypes and the same values.
+- The `dependency floors (lowest-direct)` CI job tested the newest resolution rather than the
+  declared minimums, so the floors were never a tested claim. `uv run` re-resolves from the
+  lockfile, so the step after `uv sync --resolution lowest-direct` reinstalled the newest versions
+  before running the suite. It now runs `uv run --no-sync`.
 - Fixed a latent crash in `utils._raise_connection_error`, which read `.status_code` off
   `HTTPError.response` without checking it for `None`.
 - `weo.gen_latest_version()` now takes a single UTC reading of the clock instead of two local ones.
@@ -19,6 +21,9 @@
 - The package now ships a `py.typed` marker, so downstream type checkers see its annotations
   instead of silently ignoring them.
 - Removed the Codecov integration.
+- The documentation site moved from Sphinx to MkDocs and was rewritten, and now covers WEO release
+  coverage, the SDR argument-order trap, and the caching layer. It is published at
+  <https://docs.one.org/tools/imf-reader/>.
 
 ### Corrected data
 
@@ -98,6 +103,11 @@
 - Removing an unreadable cache entry no longer fails the call. On a read-only or shared cache
   directory the removal raised `PermissionError` out of the cache layer, so a recoverable cache
   miss became a hard error. The failure is logged and the live fetch proceeds.
+- `sdr.fetch_latest_allocations_holdings_date()` raises `ValueError` naming the page and the layout
+  it expected when the IMF changes that page. It previously indexed into the fifth table and the
+  second row unguarded, so a layout change surfaced as a bare `IndexError` that named neither.
+- Labelling the four legacy-only aggregates no longer emits a pandas `FutureWarning` on pandas 2,
+  which mattered to anyone running with warnings as errors.
 
 ## v2.0.1 (2026-08-13)
 
