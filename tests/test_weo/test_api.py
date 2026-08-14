@@ -43,10 +43,7 @@ def _discovery_response(flows: list[tuple[str, str]]) -> _MockResponse:
 def _probe_response(publication_date: str) -> _MockResponse:
     """Build a mock single-row PUBLICATION_DATE probe response."""
     return _MockResponse(
-        text=(
-            "COUNTRY,INDICATOR,PUBLICATION_DATE\n"
-            f"USA,NGDP_RPCH,{publication_date}\n"
-        )
+        text=(f"COUNTRY,INDICATOR,PUBLICATION_DATE\nUSA,NGDP_RPCH,{publication_date}\n")
     )
 
 
@@ -193,9 +190,7 @@ class TestFetchFlowMapping:
 
         assert mapping == {("April", 2026): FlowRef("WEO", "9.0.0")}
 
-    def test_vintage_probe_failure_falls_back_to_id_derived_label(
-        self, cache_disabled
-    ):
+    def test_vintage_probe_failure_falls_back_to_id_derived_label(self, cache_disabled):
         discovery = _discovery_response([("WEO_2025_OCT_VINTAGE", "1.0.0")])
 
         def fake_get(url, **kwargs):
@@ -206,9 +201,7 @@ class TestFetchFlowMapping:
         with patch("imf_reader.weo.api.make_get_request", side_effect=fake_get):
             mapping = api._fetch_flow_mapping()
 
-        assert mapping == {
-            ("October", 2025): FlowRef("WEO_2025_OCT_VINTAGE", "1.0.0")
-        }
+        assert mapping == {("October", 2025): FlowRef("WEO_2025_OCT_VINTAGE", "1.0.0")}
 
     def test_vintage_unparseable_month_and_failed_probe_is_skipped(
         self, cache_disabled
@@ -367,9 +360,7 @@ class TestGetWeoDataCachedKeyIncludesFlowRef:
         mock_cached_fetch.assert_called_once_with(("October", 2025), ref)
 
     @patch("imf_reader.weo.api._fetch_flow_mapping")
-    def test_get_weo_data_raises_for_unavailable_explicit_version(
-        self, mock_mapping
-    ):
+    def test_get_weo_data_raises_for_unavailable_explicit_version(self, mock_mapping):
         mock_mapping.return_value = {("April", 2025): FlowRef("WEO", "6.0.0")}
 
         with pytest.raises(VersionNotAvailableError):
@@ -390,9 +381,7 @@ class TestFetchSeriesMetadata:
     ]
 
     def test_requests_the_series_sidecar_url(self, cache_disabled):
-        response = _MockResponse(
-            text=",".join(self._SIDECAR_COLUMNS) + "\n"
-        )
+        response = _MockResponse(text=",".join(self._SIDECAR_COLUMNS) + "\n")
 
         with patch(
             "imf_reader.weo.api.make_get_request", return_value=response
@@ -405,15 +394,12 @@ class TestFetchSeriesMetadata:
             "WEO_2025_OCT_VINTAGE/1.0.0/*"
             "?attributes=series&firstNObservations=1"
         )
-        assert mock_get_request.call_args.kwargs["headers"] == {
-            "Accept": "text/csv"
-        }
+        assert mock_get_request.call_args.kwargs["headers"] == {"Accept": "text/csv"}
 
     def test_returns_only_the_documented_columns(self, cache_disabled):
         response = _MockResponse(
             text=(
-                ",".join([*self._SIDECAR_COLUMNS, "VALUATION", "SERIES_NAME"])
-                + "\n"
+                ",".join([*self._SIDECAR_COLUMNS, "VALUATION", "SERIES_NAME"]) + "\n"
                 "USA,NGDP_RPCH,A,2024,a note,9/19/2025,volume,GDP growth\n"
             )
         )

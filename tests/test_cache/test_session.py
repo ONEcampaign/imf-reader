@@ -26,7 +26,9 @@ def _mock_dataflow_response():
     mock_resp.json.return_value = {
         "data": {"dataflows": [{"id": "WEO", "version": "9.0.0"}]}
     }
-    mock_resp.text = "COUNTRY,INDICATOR,PUBLICATION_DATE\nUSA,NGDP_RPCH,2025-10-01T00:00:00Z\n"
+    mock_resp.text = (
+        "COUNTRY,INDICATOR,PUBLICATION_DATE\nUSA,NGDP_RPCH,2025-10-01T00:00:00Z\n"
+    )
     mock_resp.raise_for_status = MagicMock()
     return mock_resp
 
