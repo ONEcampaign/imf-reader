@@ -54,6 +54,17 @@ class TestReadAnnouncements:
         with pytest.raises(ValueError, match="SDR data not available for this date"):
             read_tsv("mock_url")
 
+    @patch("pandas.read_csv")
+    def test_read_tsv_passes_the_url_to_pandas(self, mock_read_csv):
+        """The URL goes to pandas, not the shared session.
+
+        This endpoint's bot management accepts urllib's User-Agent and answers
+        the shared session's with a 403, so make_request returns no data here.
+        """
+        mock_read_csv.return_value = pd.DataFrame({"A": [1]})
+        read_tsv("mock_url")
+        assert mock_read_csv.call_args.args[0] == "mock_url"
+
     def test_clean_df_correct_format(self, input_df):
         """Test clean_df with the expected format."""
         # Mock input DataFrame
@@ -175,8 +186,20 @@ class TestReadAnnouncements:
         mock_response.content = "<html><body></body></html>"  # Missing tables
         mock_make_request.return_value = mock_response
 
-        # Call the function and expect an IndexError
-        with pytest.raises(IndexError):
+        # A layout change names the page and what was expected, rather than
+        # surfacing the bare IndexError this used to raise.
+        with pytest.raises(ValueError, match="expected at least 5 tables, found 0"):
+            fetch_latest_allocations_holdings_date()
+
+    @patch("imf_reader.sdr.read_announcements.make_request")
+    def test_get_latest_date_too_few_rows(self, mock_make_request):
+        """The announcements table having no data row is reported, not indexed into."""
+
+        # Five tables so the first check passes, but a single row in the fifth.
+        tables = "<table></table>" * 4 + "<table><tr><td>header</td></tr></table>"
+        mock_make_request.return_value = Mock(content=f"<html>{tables}</html>")
+
+        with pytest.raises(ValueError, match="expected at least 2 rows"):
             fetch_latest_allocations_holdings_date()
 
     @patch("imf_reader.sdr.read_announcements.fetch_latest_allocations_holdings_date")
