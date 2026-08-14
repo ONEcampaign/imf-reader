@@ -179,7 +179,9 @@ meta.shape
 
 Only three columns are guaranteed present release to release, `REF_AREA_CODE`, `CONCEPT_CODE`, and `FREQ_CODE`, the join keys below. The rest of the column set is release-dependent by design, since it follows whatever attribute set the IMF's DSD carries for that release, and that attribute set moves between releases.
 
-Every column, including columns that look numeric such as `BASE_YEAR` and `DECIMALS_DISPLAYED`, is typed `string`. Native type inference for these columns changes from one release to the next. `BASE_YEAR` shows why directly. Most values are a plain year like `2013`, but some carry a fiscal-year form like `FY2003/04`, which native inference would either choke on or silently misread.
+Every column, including columns that look numeric such as `BASE_YEAR` and `DECIMALS_DISPLAYED`, is typed `string`. Native type inference for these columns changes from one release to the next. In `BASE_YEAR`, most values are a plain year like `2013`, while some carry a fiscal-year form like `FY2003/04` that native inference would either choke on or silently misread.
+
+Values arrive as the IMF publishes them. A cell whose literal content is `N/A` stays the string `N/A`, distinct from an empty cell, which is null. 19 cells across `METHODOLOGY_NOTES` and `BASIS_OF_PROJECTIONS` take that form in the April 2026 release. `fetch_data()`'s `NOTES` column reads both forms as null, since null is the right value for "no note" there.
 
 ### Merge onto observations
 
@@ -198,7 +200,7 @@ df.shape
 (361733, 54)
 ```
 
-Two independent `version=None` calls, one to `fetch_data()` and one to `fetch_series_metadata()`, can resolve to different releases if a new one is published between them, merging one release's metadata onto another release's observations with nothing to signal the mismatch. `fetch_data_with_metadata()` closes that hole by construction. It resolves the metadata call to whatever release `fetch_data()` actually served. Doing the merge by hand needs the same pin, using `fetch_data.last_version_fetched`:
+Two independent `version=None` calls, one to `fetch_data()` and one to `fetch_series_metadata()`, can resolve to different releases if a new one is published between them, merging one release's metadata onto another release's observations with nothing to signal the mismatch. `fetch_data_with_metadata()` resolves both halves to the release its own observations call served, and pins them to that release's dataflow version. Doing the merge by hand needs the same pin, using `fetch_data.last_version_fetched`:
 
 ```python
 from imf_reader import weo
@@ -208,11 +210,11 @@ meta = weo.fetch_series_metadata(weo.fetch_data.last_version_fetched)
 merged = df.merge(meta, on=["REF_AREA_CODE", "CONCEPT_CODE", "FREQ_CODE"], how="left")
 ```
 
-Series metadata exists only for releases the API itself serves, April 2025 onward, with no bulk-archive fallback. A version the API can't serve raises `VersionNotAvailableError` rather than returning a frame of null columns, since null columns would assert that the IMF publishes no methodology for these series, when the truth is that this source has no series metadata to give at all. See [WEO coverage and known issues](weo-coverage.md#series-metadata-is-api-only).
+Series metadata exists only for releases the API itself serves, April 2025 onward, with no bulk-archive fallback. A version the API can't serve raises `VersionNotAvailableError`. A frame of null columns would assert that the IMF publishes no methodology for these series, when this source carries no series metadata at all. See [WEO coverage and known issues](weo-coverage.md#series-metadata-is-api-only).
 
 ### Excluded and always-null columns
 
-Three sidecar columns are left off `fetch_series_metadata()`'s output. `COUNTRY_UPDATE_DATE` is excluded because `fetch_data()` already publishes it. `UNIT` and `SCALE` are excluded because they duplicate `UNIT_CODE` and `SCALE_CODE`. `SCALE` in particular is worth calling out even though it's excluded. The sidecar carries the bare exponent (e.g. `9`), while `fetch_data()`'s `SCALE_CODE` carries the multiplier that exponent converts to (`1000000000`). Mixing the two up silently changes a value's magnitude by a power of ten.
+Three sidecar columns are left off `fetch_series_metadata()`'s output. `COUNTRY_UPDATE_DATE` is excluded because `fetch_data()` already publishes it. `UNIT` and `SCALE` are excluded because they duplicate `UNIT_CODE` and `SCALE_CODE`. The sidecar's `SCALE` carries the bare exponent (e.g. `9`), while `fetch_data()`'s `SCALE_CODE` carries the multiplier that exponent converts to (`1000000000`). Mixing the two up silently changes a value's magnitude by a power of ten.
 
 Four columns are present but null across every one of the 8,200 series in the April 2026 release, `FUNCTIONAL_CAT`, `COICOP_1999`, `TRANSFORMATION`, and `REPORTING_PERIOD_TYPE`.
 
