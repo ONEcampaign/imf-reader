@@ -3,14 +3,37 @@ name = "imf-reader"
 version = "2.0.1"
 description = "A package to access imf data"
 authors = [{ name = "The ONE Campaign" }]
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.12"
+keywords = [
+    "imf",
+    "world-economic-outlook",
+    "weo",
+    "sdr",
+    "special-drawing-rights",
+    "economic-data",
+    "pandas",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
-    "pandas>=2.2.2",
+    "pandas>=3.0.0",
     "requests>=2.32.1",
     "beautifulsoup4>=4.12.3",
-    "pyarrow>=14.0",
+    "pyarrow>=16.0",
     "readerkit>=0.1.0",
 ]
 
@@ -21,6 +44,13 @@ repository = "https://github.com/ONEcampaign/imf-reader"
 issues = "https://github.com/ONEcampaign/imf-reader/issues"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --strict-config"
+# Warnings are errors so that a dependency's deprecation shows up as a failing
+# build while there is still a release cycle to act on it, rather than as a
+# breakage after the upstream removal lands.
+filterwarnings = ["error"]
+xfail_strict = true
 markers = [
     "live: hits real external services; skipped unless IMF_READER_LIVE_TESTS=1",
 ]
@@ -29,9 +59,17 @@ markers = [
 version_toml = [
     "pyproject.toml:project.version",
 ]
-branch = "main"
-changelog_file = "CHANGELOG.md"
 build_command = "pip install uv && uv build"
+
+# The release branch belongs in a `branches.<name>` table and `changelog_file`
+# under `changelog.default_templates` (moved in v9.11.0). At the top level of
+# `[tool.semantic_release]` both keys are ignored, and the branch restriction
+# and changelog path silently fall back to defaults.
+[tool.semantic_release.branches.main]
+match = "main"
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13"]
@@ -40,8 +78,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
-    "pytest-cov>=5.0.0",
-    "ruff>=0.15.0",
+    "ruff>=0.16.0",
     "ty>=0.0.59",
     "pre-commit>=4.6.0",
 ]
@@ -64,7 +101,6 @@ exclude = [
     "dist",
     "*.egg-info",
     ".pytest_cache",
-    "htmlcov",
 ]
 
 [tool.ruff.lint]
@@ -82,6 +118,8 @@ select = [
     "ERA",               # eradicate (commented-out code)
     "PERF",              # perflint
     "ANN",               # flake8-annotations (require type hints on public APIs)
+    "S",                 # bandit (security — this package parses data off the wire)
+    "DTZ",               # flake8-datetimez (no naive datetimes in a data library)
 ]
 
 ignore = [
@@ -103,7 +141,10 @@ unfixable = []
 # tests import a deprecated shim symbol inside the test body itself (sometimes inside
 # a warnings.catch_warnings() block), a deliberate per-test scoping pattern rather than
 # a top-level import.
-"tests/**/*.py" = ["ANN", "PLR2004", "PLC0415"]
+# PLR0917: @patch decorators inject one positional mock per decorator, so a test
+# with several patches exceeds the positional-argument cap by construction.
+# S101: `assert` is how pytest expresses every assertion.
+"tests/**/*.py" = ["ANN", "PLR2004", "PLC0415", "PLR0917", "S101"]
 # Notebooks are exempt from annotations and allow REPL-style patterns.
 "**/*.ipynb" = ["ANN", "F401", "F811", "E402"]
 # Allow global variable usage in the cache-config module (memoised singleton pattern).

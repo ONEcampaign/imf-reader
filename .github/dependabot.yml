@@ -1,0 +1,47 @@
+version: 2
+
+updates:
+  # Direct dependencies, via pyproject.toml + uv.lock.
+  #
+  # Dependabot's uv support updates the dependencies declared in
+  # pyproject.toml and leaves transitive-only entries in uv.lock alone, even
+  # where `uv lock --upgrade` would bump them
+  # (dependabot/dependabot-core#14073). Every security alert this repo has
+  # received has been against a transitive package (soupsieve, urllib3, idna),
+  # so lock-refresh.yml carries those and this block carries the declared set.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    # Touch uv.lock only, never widen or raise the floors in pyproject.toml.
+    # This is a library: its declared floors are a compatibility promise to
+    # downstream consumers, not a description of what CI happens to install.
+    versioning-strategy: lockfile-only
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      runtime-dependencies:
+        dependency-type: "production"
+      dev-tooling:
+        dependency-type: "development"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

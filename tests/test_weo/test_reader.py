@@ -2,7 +2,7 @@
 
 import io
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import patch
 from zipfile import ZipFile
 
@@ -115,15 +115,15 @@ def test_gen_latest_version(mock_datetime):
     """Test for gen_latest_version function."""
 
     # Mock the current date to be in April
-    mock_datetime.now.return_value = datetime(2024, 4, 1)
+    mock_datetime.now.return_value = datetime(2024, 4, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("April", 2024)
 
     # Mock the current date to be in October
-    mock_datetime.now.return_value = datetime(2024, 10, 1)
+    mock_datetime.now.return_value = datetime(2024, 10, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("October", 2024)
 
     # Mock the current date to be in January
-    mock_datetime.now.return_value = datetime(2024, 1, 1)
+    mock_datetime.now.return_value = datetime(2024, 1, 1, tzinfo=UTC)
     assert reader.gen_latest_version() == ("October", 2023)
 
 

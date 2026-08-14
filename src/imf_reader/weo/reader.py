@@ -1,6 +1,6 @@
 """Main interface to the WEO database."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
@@ -52,8 +52,13 @@ def gen_latest_version() -> Version:
         A tuple of the latest month and year
     """
 
-    current_year = datetime.now().year
-    current_month = datetime.now().month
+    # A single reading, because two now() calls can straddle midnight on 31
+    # December and pair a year with the following year's month. UTC keeps the
+    # answer independent of the caller's location, since what is inferred here
+    # is the IMF's publication schedule.
+    now = datetime.now(tz=UTC)
+    current_year = now.year
+    current_month = now.month
 
     if current_month < 4:
         return "October", current_year - 1

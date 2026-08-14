@@ -1,0 +1,57 @@
+# Weekly `uv lock --upgrade`, opened as a PR.
+#
+# Dependabot's uv ecosystem leaves transitive-only entries in uv.lock alone
+# (dependabot/dependabot-core#14073), and every security alert this repo has
+# received has been against a transitive package. dependabot.yml covers the
+# declared dependencies. This covers the rest of the resolution.
+
+name: lock-refresh
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lock-refresh:
+    runs-on: ubuntu-latest
+    name: Refresh uv.lock
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Refresh the lockfile
+        run: uv lock --upgrade
+
+      # Run the suite against the refreshed lock so the PR arrives already
+      # knowing whether the upgrade is safe, rather than deferring that to
+      # whoever reviews it.
+      - name: Test against the refreshed lock
+        run: |
+          uv sync --all-groups
+          uv run pytest tests/
+
+      - name: Open a PR if the lockfile changed
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          commit-message: "chore(deps): refresh uv.lock"
+          title: "chore(deps): weekly uv.lock refresh"
+          body: |
+            Automated `uv lock --upgrade`.
+
+            Refreshes the transitive pins that Dependabot's uv ecosystem does
+            not reliably bump (dependabot/dependabot-core#14073). The test
+            suite ran against this resolution before the PR was opened.
+          branch: chore/uv-lock-refresh
+          labels: dependencies
+          delete-branch: true

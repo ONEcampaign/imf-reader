@@ -86,6 +86,7 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
 
     response = make_request(MAIN_PAGE_URL)
     soup = BeautifulSoup(response.content, "html.parser")
+
     table = soup.find_all("table")[4]
     row = table.find_all("tr")[1]
 
@@ -93,10 +94,12 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
     if td is None:
         raise ValueError("Could not find the latest SDR announcement date in the page")
 
-    date = td.text.strip()
-    date = datetime.strptime(date, "%B %d, %Y")
+    # DTZ007: the page renders a bare calendar date ("March 31, 2025"), so
+    # there is no zone to parse and attaching one would invent precision the
+    # source lacks. Reduced to a date, of which only the year and month are read.
+    parsed = datetime.strptime(td.text.strip(), "%B %d, %Y").date()  # noqa: DTZ007
 
-    return date.year, date.month
+    return parsed.year, parsed.month
 
 
 def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFrame:
@@ -120,9 +123,9 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
         latest_date = fetch_latest_allocations_holdings_date()
         logger.setLevel(original_logger_level)
 
-        date_obj = datetime(date[0], date[1], 1)
-        latest_date_obj = datetime(latest_date[0], latest_date[1], 1)
-        if date_obj > latest_date_obj:
+        # (year, month) tuples order the same way the dates they stand for do,
+        # so the comparison needs no datetime construction.
+        if date > latest_date:
             raise ValueError(
                 f"SDR data unavailable for: ({date[0]}, {date[1]}).\nLatest available: ({latest_date[0]}, {latest_date[1]})"
             )
