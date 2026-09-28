@@ -1,3 +1,7 @@
+---
+description: Learn which WEO releases each IMF source serves, which two are corrupt, and where units and metadata differ.
+---
+
 # WEO coverage and known issues
 
 `imf_reader.weo` reads WEO data from two sources. Both carry permanent limits, and those
