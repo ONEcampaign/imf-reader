@@ -1,3 +1,7 @@
+---
+description: Fetch and filter IMF WEO releases, inspect their columns and series metadata, and check which errors the package can raise.
+---
+
 # World Economic Outlook
 
 The World Economic Outlook (WEO) is the IMF's database of macroeconomic projections and estimates, released every April and October. The `weo` module fetches a release as a single pandas DataFrame.

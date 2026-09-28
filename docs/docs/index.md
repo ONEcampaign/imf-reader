@@ -1,3 +1,7 @@
+---
+description: What imf-reader fetches from the IMF, how it joins the WEO API and bulk archive, and a first WEO query in pandas.
+---
+
 # imf-reader
 
 **One pandas interface for IMF World Economic Outlook and Special Drawing Rights data.**

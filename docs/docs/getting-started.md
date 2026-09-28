@@ -1,3 +1,7 @@
+---
+description: Install imf-reader, fetch and filter a WEO release, check which release you got, and fetch SDR exchange rates and holdings.
+---
+
 # Getting started
 
 ## Install

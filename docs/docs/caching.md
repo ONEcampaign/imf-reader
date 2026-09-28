@@ -1,3 +1,7 @@
+---
+description: Where imf-reader keeps its disk cache, how long entries last, and how to relocate, inspect, clear, or disable it.
+---
+
 # Caching
 
 `imf-reader` caches data to disk. Repeated calls avoid re-requesting from the IMF, and results survive process restarts.

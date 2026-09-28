@@ -1,3 +1,7 @@
+---
+description: Compare imf-reader with weo-reader and manual downloads, and learn how it handles IMF WEO and SDR data and where it falls short.
+---
+
 # Why imf-reader
 
 ## The problem

@@ -1,3 +1,7 @@
+---
+description: How to fetch SDR holdings, allocations, exchange rates, and interest rates from IMF web pages with imf-reader.
+---
+
 # Special Drawing Rights
 
 The Special Drawing Rights (SDR) is an international reserve asset the IMF created in 1969, exchangeable for usable currencies. Read more in the IMF's [SDR factsheet](https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr).

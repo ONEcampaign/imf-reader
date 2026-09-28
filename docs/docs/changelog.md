@@ -1,3 +1,7 @@
+---
+description: Where to find the imf-reader version history, how its version numbers work, and what the 3.0 release removes.
+---
+
 # Changelog
 
 The full version history lives in [`CHANGELOG.md`](https://github.com/ONEcampaign/imf-reader/blob/main/CHANGELOG.md) in the repository, generated from [Conventional Commits](https://www.conventionalcommits.org/) on every release.
