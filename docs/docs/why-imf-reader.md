@@ -16,11 +16,12 @@ A WEO time series spanning 2019 to today draws on both systems, the bulk archive
 years and the API for the recent ones, each with its own area-code and unit-code vocabulary.
 Something has to reconcile them before the series is usable.
 
-The daily SDR valuation and the weekly interest rate have no API at all; the IMF publishes only
-HTML pages built for a browser. Allocations and holdings do exist on the IMF's API at monthly
-frequency, but this package parses them from HTML too. All four Special Drawing Rights (SDR)
-series, holdings, allocations, exchange rates, and interest rates, are parsed from HTML. Page
-structure, class names, and table layout change whenever the IMF redesigns the site.
+The daily SDR valuation and the weekly interest rate have no API at all. The IMF publishes only
+web pages built for a browser. Allocations and holdings do exist on the IMF's API at monthly
+frequency, but this package reads them from the web pages too. All four Special Drawing Rights
+(SDR) series, holdings, allocations, exchange rates, and interest rates, come from tab-separated
+downloads on IMF web pages. Only the latest-month lookup parses HTML. Page structure, link
+targets, and table layout change whenever the IMF redesigns the site.
 
 Both surfaces are volatile. The bulk archive already contains two corrupted releases, April 2021
 and October 2023, that fail a CRC-32 check on every re-download. The IMF's codelists have changed
@@ -36,16 +37,16 @@ same column names and the same codes throughout, with no branch for which system
 year.
 
 Every fetch is cached to disk. If the IMF's SDR pages are unreachable or the API returns an
-error, already-cached data keeps working. Requesting the latest release when the IMF has not
+error, cached results keep working until their TTL expires. Requesting the latest release when the IMF has not
 published it yet triggers a bounded rollback. `fetch_data()` walks the published releases
-newest-first and tries up to three of them, logging each attempt as a warning. Requesting a
+newest-first. It tries the newest release, then up to three older releases, logging each rollback as a warning. Requesting a
 specific release always resolves to that release or raises. If the API can't serve it,
 `fetch_data` falls back to the bulk archive for that same release before raising. The two corrupt bulk
 releases behave differently. Fetching one raises `cache.BulkPayloadCorruptError`, flagged
 `is_retryable=False` so a retry loop can skip it.
 
-All output is typed pandas, with nullable `Int64`, `Float64`, and `string` dtypes throughout,
-ready for filtering and arithmetic without a casting step.
+WEO output is typed pandas, with nullable `Int64`, `Float64`, and `string` dtypes, ready for
+filtering and arithmetic without a casting step. SDR frames carry the NumPy dtypes that `pd.to_numeric` and `pd.to_datetime` infer.
 
 ## Alternatives
 
@@ -77,10 +78,10 @@ means writing and maintaining that script yourself.
 - A pipeline or notebook needs WEO indicators spanning both the API era and the bulk-archive era
   in one call.
 - SDR holdings, allocations, exchange rates, or interest rates need to arrive through one function
-  call, with the package owning the HTML parsing.
+  call, with the package owning the web-page downloads and their parsing.
 - The same fetch runs repeatedly and has to survive a slow or unavailable IMF endpoint.
-- Typed pandas output (nullable `Int64`, `Float64`, and `string` dtypes) is needed without a
-  separate casting step.
+- Typed pandas output (nullable `Int64`, `Float64`, and `string` dtypes for WEO) is needed without
+  a separate casting step.
 
 ## Next steps
 

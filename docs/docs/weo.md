@@ -77,9 +77,9 @@ weo.fetch_data.last_version_fetched
 ('April', 2026)
 ```
 
-!!! warning "Heads up"
+!!! warning
 
-    If the release you asked for has no data yet, `fetch_data()` rolls back: for `version=None`
+    If the release you asked for has no data yet, `fetch_data()` rolls back. For `version=None`
     ("latest"), it walks `get_weo_versions()` newest-first and tries up to 3 older releases,
     logging each attempt at WARNING. An explicit version (e.g. `fetch_data(("October", 2025))`)
     never rolls back to a different release. If the API can't serve it, `fetch_data` falls back
@@ -141,7 +141,7 @@ The April 2026 release covers 145 concepts across 210 areas, with `TIME_PERIOD` 
 
 ## Columns
 
-The 16 columns below are identical in name, order, and meaning on both source paths (the API and the bulk archive).
+The 16 columns below share names and order on both source paths (the API and the bulk archive). Where meaning differs between paths, the table says so.
 
 | Column                | dtype          | What it holds                                                                                                                                                                                                                                                                                                                                                                                   |
 | --------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -185,7 +185,7 @@ Only three columns are guaranteed present release to release, `REF_AREA_CODE`, `
 
 Every column, including columns that look numeric such as `BASE_YEAR` and `DECIMALS_DISPLAYED`, is typed `string`. Native type inference for these columns changes from one release to the next. In `BASE_YEAR`, most values are a plain year like `2013`, while some carry a fiscal-year form like `FY2003/04` that native inference would either choke on or silently misread.
 
-Values arrive as the IMF publishes them. A cell whose literal content is `N/A` stays the string `N/A`, distinct from an empty cell, which is null. 19 cells across `METHODOLOGY_NOTES` and `BASIS_OF_PROJECTIONS` take that form in the April 2026 release. `fetch_data()`'s `NOTES` column reads both forms as null, since null is the right value for "no note" there.
+Values arrive as the IMF publishes them. A cell whose literal content is `N/A` stays the string `N/A`, distinct from an empty cell, which is null. 19 cells in the April 2026 release hold a not-applicable literal: `N/A` in `METHODOLOGY_NOTES` and `n/a` in `BASIS_OF_PROJECTIONS`. `fetch_data()`'s `NOTES` column reads both forms as null, since null is the right value for "no note" there.
 
 ### Merge onto observations
 
@@ -294,12 +294,11 @@ from imf_reader.config import DataflowDiscoveryError, NoDataError, VersionNotAva
 - `DataflowDiscoveryError(NoDataError)`, raised when the IMF's dataflow catalogue responds but
   carries no usable WEO dataflow, so no release, including "latest", can be resolved from it.
 
-All three import from `imf_reader.config`. `imf_reader.cache` re-exports `BulkPayloadCorruptError`
-alone.
+`imf_reader.cache` re-exports `BulkPayloadCorruptError` alone.
 
 ## Clearing the cache
 
-`weo.clear_cache()` works but is deprecated: it emits a `DeprecationWarning` and is removed in 3.0. Use `cache.clear_cache(scope="weo")` instead. See [Caching](caching.md) for the full cache model.
+`weo.clear_cache()` works but is deprecated. It emits a `DeprecationWarning` and is removed in 3.0. Use `cache.clear_cache(scope="weo")` instead. See [Caching](caching.md) for the full cache model.
 
 ## Next steps
 

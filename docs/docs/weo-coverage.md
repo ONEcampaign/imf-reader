@@ -17,7 +17,7 @@ April 2025 is the one release available from both sources. The test suite pins t
 directly: `test_april_2025_matches_across_both_paths` in `tests/test_weo/test_schema_parity.py`
 asserts the two paths produce matching data for that release.
 
-!!! info "Why"
+!!! note
 
     The two sources use different native schemas. The API serves observations as CSV keyed on its
     own area and unit codes. The bulk archive holds an older SDMX XML layout, keyed on legacy numeric area
@@ -29,10 +29,11 @@ asserts the two paths produce matching data for that release.
 
 `REF_AREA_CODE` is ISO3 (`NGA`) or a `G`-prefixed aggregate (`G001`) on both paths.
 Bulk-archive releases start out keyed on legacy numeric area codes, and `imf_reader` maps each
-one onto the matching ISO3 or aggregate code before returning the frame. `UNIT_CODE` and every
-label column (`REF_AREA_LABEL`, `CONCEPT_LABEL`, `UNIT_LABEL`, `FREQ_LABEL`, `SCALE_LABEL`) are
-re-derived from the same IMF codelists the API path reads, on both paths, keeping wording
-identical across the two paths. Rows with a null `OBS_VALUE` are dropped on both paths.
+one onto the matching ISO3 or aggregate code before returning the frame. On the bulk path,
+`imf_reader` maps `UNIT_CODE` onto the API's unit codes and re-derives `REF_AREA_LABEL`,
+`UNIT_LABEL`, and `CONCEPT_LABEL` from the same IMF codelists the API path reads, so their
+wording matches the API path. `FREQ_LABEL` and
+`SCALE_LABEL` keep the labels from the release's SDMX schema. Rows with a null `OBS_VALUE` are dropped on both paths.
 
 Because column names, order, and codes match across the join, frames from different releases
 concatenate with `pd.concat` without reindexing.
@@ -40,15 +41,15 @@ concatenate with `pd.concat` without reindexing.
 ## The two corrupt releases
 
 April 2021 and October 2023 are corrupt in the IMF's own published bulk archive. The CRC-32 of
-the inner XML doesn't match, and re-downloading reproduces identical bytes, a stable SHA-256
-matching `Content-Length`. This rules out a transit or caching problem on this package's end.
+the inner XML doesn't match, and re-downloading reproduces identical bytes. The SHA-256 is stable, and the byte count matches
+`Content-Length`. This rules out a transit or caching problem on this package's end.
 The corruption is at the IMF's source, and it can't be fetched by any means.
 
 `weo.get_weo_versions()` omits both releases from its result. Requesting either one directly
 raises `cache.BulkPayloadCorruptError` with `is_retryable=False`, so retry logic can
 distinguish this from an ordinary network failure and stop.
 
-!!! warning "Heads up"
+!!! warning
 
     `fetch_data(("April", 2021))` and `fetch_data(("October", 2023))` always raise
     `cache.BulkPayloadCorruptError`. The corruption is permanent at the IMF's source, so no retry
@@ -60,8 +61,8 @@ Four PPP concepts have a null `UNIT_CODE` on every release: `PPPGDP`, `PPPPC`, `
 `NGDPRPPPPC`. The IMF's `CL_UNIT` codelist has no code for "international dollar", so there is
 no unit to map these four concepts to, on the API or the translated bulk-archive rows.
 
-`LE`, `LP`, and `LUR` carry a `UNIT_CODE` (`PE` or `PT`) on bulk-archive releases and a null
-one on API releases. A filter on `UNIT_CODE` for these three concepts matches releases before
+`LE` carries a `UNIT_CODE` of `PE` or `IX`, `LP` carries `PE`, and `LUR` carries `PT` on
+bulk-archive releases. Each is null on API releases. A filter on `UNIT_CODE` for these three concepts matches releases before
 April 2025 and misses everything from April 2025 onward. When working across versions for
 population, employment, or unemployment, read `CONCEPT_CODE` or `CONCEPT_LABEL` instead.
 
@@ -69,12 +70,11 @@ population, employment, or unemployment, read `CONCEPT_CODE` or `CONCEPT_LABEL` 
 
 In the bulk archive, the IMF marks roughly 1,200 observations per release with the token `--`,
 its convention for "zero, or less than half the final digit shown" rather than a true zero. A
-deflator or index cell reading `--` one year and a tiny value like `0.002` the next is common; the
+deflator or index cell reading `--` one year and a tiny value like `0.002` the next is common. The
 `--` is a rounding artefact, not a report of zero. Rows carrying `--` in `OBS_VALUE` are dropped,
-same as any other null observation, rather than written as `0.0` or flagged with a status column:
-either alternative would create a permanent public column for a discontinued, 0.3%-of-cells
+same as any other null observation, rather than written as `0.0` or flagged with a status column, since either alternative would create a permanent public column for a discontinued, 0.3%-of-cells
 archive. The count dropped for that reason is logged at `debug`. The API path has no such cells
-either: every release from April 2025 onward simply omits the observation rather than marking it
+either. Every release from April 2025 onward simply omits the observation rather than marking it
 `--`, so the two paths agree once the drop is applied.
 
 ## `LASTACTUALDATE` and `NOTES` come from different fields on each path
@@ -87,7 +87,7 @@ and the bulk archive's `NOTES` are different free text describing different thin
 
 About 10.7% of populated series carry `LATEST_ACTUAL_ANNUAL_DATA` in a fiscal-year form,
 `FY2023/24`, rather than a plain year, and `imf_reader` maps it to `2023`, its leading year. This
-is a one-way, lossy mapping: the fiscal-year distinction is discarded, and there is no way to
+is a one-way, lossy mapping. The fiscal-year distinction is discarded, and there is no way to
 recover it from `LASTACTUALDATE`. If you're reconciling against the IMF's own published metadata,
 don't read `2023` as "reported as of calendar year 2023". The leading-year convention only
 approximates that. If the fiscal-year boundary matters to your use case, call
@@ -97,7 +97,7 @@ approximates that. If the fiscal-year boundary matters to your use case, call
 halves of this gotcha are recoverable from that frame. See
 [Series metadata](weo.md#series-metadata). This route is API-served releases only, and that
 boundary coincides exactly with where fiscal-year forms exist in the first place, since the bulk
-archive's `LASTACTUALDATE` is always a plain year, which is also what keeps `LASTACTUALDATE`
+archive's `LASTACTUALDATE` is always a plain year. That is also why `LASTACTUALDATE` stays
 comparable across the two paths once mapped to the leading year.
 
 Which vocabulary a row's `NOTES` came from has no marker among the 16 columns. If you concatenate
