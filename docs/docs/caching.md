@@ -25,11 +25,11 @@ print(imf_reader.__version__)
 print(cache.get_cache_dir())
 ```
 
-!!! info "Why"
+!!! note
 
     The root is segmented by package version. Each version's cache lives in its own directory, so upgrading `imf-reader` starts with a clean cache automatically.
 
-!!! warning "Heads up"
+!!! warning
 
     Old version directories accumulate on disk as you upgrade, since nothing removes them automatically. Segmentation only helps across a released version bump. An editable or git-pinned install stays inside the same version segment while the code underneath it changes, so the cache directory stays fixed even as the code changes. See [Editable and git installs](#editable-and-git-installs) below.
 
@@ -47,7 +47,7 @@ WEO series metadata is cached separately from WEO observations, so a failed meta
 leaves the already-cached observations untouched.
 
 One cached sidecar entry backs `weo.fetch_series_metadata()` and `weo.api.get_series_metadata()`
-as well as `fetch_data`'s `LASTACTUALDATE`, `NOTES`, and `COUNTRY_UPDATE_DATE` columns, all four
+as well as `fetch_data`'s `LASTACTUALDATE`, `NOTES`, and `COUNTRY_UPDATE_DATE` columns, all five
 read from the same underlying fetch. Calling `fetch_series_metadata()` after `fetch_data()` (or
 the reverse) for the same release costs no extra request beyond the first one, since the second
 call is served from the entry the first one wrote.
@@ -136,7 +136,7 @@ cache.get_dataframe_cache_dir()   # the SDR sublayer
 cache.get_http_cache_path()       # the HTTP sublayer
 ```
 
-!!! warning "Heads up"
+!!! warning
 
     `get_dataframe_cache_dir()` returns the SDR sublayer only, for parity with `oda_reader`, whose single dataframe sublayer maps directly to one helper. `imf-reader` splits parsed frames across three sublayers (`sdr`, `weo_api`, `weo_sdmx_parsed`).
 

@@ -8,7 +8,7 @@ description: What imf-reader fetches from the IMF, how it joins the WEO API and 
 
 The IMF publishes the World Economic Outlook (WEO) database through an SDMX API for recent
 releases and through a discontinued bulk archive for everything before it, with a vocabulary
-change between the two. It publishes Special Drawing Rights (SDR) data through no API at all,
+change between the two. It publishes SDR exchange rates and interest rates through no API at all,
 only web pages meant for browsers. `imf-reader` puts both behind one pandas-shaped interface.
 
 The package fetches, translates, and caches the data so an analysis script can call one function
@@ -19,7 +19,7 @@ and get back a typed DataFrame, regardless of which IMF system the numbers live 
 - Joins both WEO sources onto one vocabulary, so columns and codes match across the April 2025
   split
 - Parses SDR holdings, allocations, exchange rates, and interest rates from IMF web pages
-- Caches results to disk, so already-cached data keeps working through a broken upstream
+- Caches results to disk, so fresh cached data keeps working while the IMF is down, until each entry's TTL expires
 - Returns typed pandas DataFrames throughout
 
 ## Quick example

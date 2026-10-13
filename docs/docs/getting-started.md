@@ -121,8 +121,7 @@ them out.
 
 ## Fetch SDR data
 
-SDR data has no API. `imf-reader` parses it from IMF web pages and returns the same kind of
-typed pandas frame as the WEO functions.
+SDR exchange rates and interest rates have no API. `imf-reader` reads SDR data from IMF web pages and returns a pandas DataFrame.
 
 ```python
 from imf_reader import sdr
@@ -139,17 +138,9 @@ period. It defaults to `unit_basis="SDR"`, giving 1 SDR expressed in USD. Pass
 `allocations`), `value`, and `date`. Called with no argument it returns the latest month
 available. Pass a specific month as a `(year, month)` tuple.
 
-!!! warning "Heads up"
+!!! warning
 
-    SDR and WEO order their date arguments differently. `sdr.fetch_allocations_holdings((2021, 4))` takes `(year, month)` as integers, for April 2021. `weo.fetch_data(("April", 2021))` takes `(month, year)`, with the month as a name. Check which module you're calling before passing a tuple.
-
-## What just happened
-
-1. `weo.fetch_data()` picked whichever source, API or bulk archive, serves the requested release.
-2. Filtering happened in pandas, on plain column values.
-3. `sdr.fetch_exchange_rates()` and `sdr.fetch_allocations_holdings()` parsed IMF web pages into
-   the same kind of frame.
-4. Every call cached its result to disk, so running the same snippet again is immediate.
+    SDR and WEO order their date arguments differently. `sdr.fetch_allocations_holdings((2021, 4))` takes `(year, month)` as integers, for April 2021. `weo.fetch_data(("April", 2024))` takes `(month, year)`, with the month as a name. Check which module you're calling before passing a tuple.
 
 ## Next steps
 

@@ -6,7 +6,7 @@ description: How to fetch SDR holdings, allocations, exchange rates, and interes
 
 The Special Drawing Rights (SDR) is an international reserve asset the IMF created in 1969, exchangeable for usable currencies. Read more in the IMF's [SDR factsheet](https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights-sdr).
 
-The IMF publishes no API for the daily SDR valuation or the weekly interest rate; those two are web-only. Allocations and holdings do exist on the IMF's API, at monthly frequency (`IMF.STA:FA`), but this package has not moved to it. The `sdr` module works by parsing pages on the IMF website for all four series, so it is sensitive to the IMF restructuring those pages.
+The IMF publishes no API for the daily SDR valuation or the weekly interest rate. Those two are web-only. Allocations and holdings do exist on the IMF's API, at monthly frequency (`IMF.STA:FA`), but this package has not moved to it. The `sdr` module works by parsing pages on the IMF website for all four series, so it is sensitive to the IMF restructuring those pages.
 
 ## Holdings and allocations
 
@@ -47,7 +47,7 @@ latest = sdr.fetch_latest_allocations_holdings_date()
 
 Returns a `(year, month)` tuple.
 
-!!! warning "Heads up"
+!!! warning
 
     SDR and WEO order their date arguments differently. SDR takes `(year, month)` as integers, WEO takes `(month, year)` with the month as a name.
 
@@ -60,10 +60,10 @@ Returns a `(year, month)` tuple.
     ```python
     from imf_reader import weo
 
-    weo.fetch_data(("April", 2021))   # April 2021: month name, then year
+    weo.fetch_data(("April", 2024))   # April 2024: month name, then year
     ```
 
-    Passing one module's order to the other fails silently, away from the call site. Check
+    Passing one module's order to the other raises an error. Check
     which one you're calling.
 
 ## Exchange rates
