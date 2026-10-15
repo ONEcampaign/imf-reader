@@ -1,7 +1,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/imf-reader?label=PyPI%20-%20version)](https://pypi.org/project/imf-reader/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/imf-reader.svg)](https://pypi.org/project/imf-reader/)
 [![Anaconda version](https://img.shields.io/conda/vn/conda-forge/imf-reader?label=conda%20-%20version)](https://anaconda.org/channels/conda-forge/packages/imf-reader)
-[![Docs](https://img.shields.io/badge/docs-imf--reader-blue)](https://docs.one.org/tools/imf-reader/)
+[![Docs](https://img.shields.io/badge/docs-imf--reader-blue)](https://developmentfinance.org/docs/tools/imf-reader)
 
 # imf-reader
 
@@ -93,11 +93,11 @@ documentation.
 
 ## Documentation
 
-Full documentation lives at [docs.one.org/tools/imf-reader](https://docs.one.org/tools/imf-reader/).
-Start with [Why imf-reader](https://docs.one.org/tools/imf-reader/why-imf-reader/) for the
-motivation, [Getting started](https://docs.one.org/tools/imf-reader/getting-started/) for a
-first walkthrough, and the [WEO](https://docs.one.org/tools/imf-reader/weo/) and
-[SDR](https://docs.one.org/tools/imf-reader/sdr/) guides for dataset-specific detail.
+Full documentation lives at [developmentfinance.org/docs/tools/imf-reader](https://developmentfinance.org/docs/tools/imf-reader).
+Start with [Why imf-reader](https://developmentfinance.org/docs/tools/imf-reader/why-imf-reader) for the
+motivation, [Getting started](https://developmentfinance.org/docs/tools/imf-reader/getting-started) for a
+first walkthrough, and the [WEO](https://developmentfinance.org/docs/tools/imf-reader/weo) and
+[SDR](https://developmentfinance.org/docs/tools/imf-reader/sdr) guides for dataset-specific detail.
 
 ## Contributing
 
