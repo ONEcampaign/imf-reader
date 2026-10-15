@@ -19,7 +19,7 @@
   `START_END_MONTHS_OF_REPORTING_YEAR`, and the raw `LATEST_ACTUAL_ANNUAL_DATA` with its
   fiscal-year forms such as `FY2023/24` intact, are now both readable from
   `weo.fetch_series_metadata()`, recovering the distinction `LASTACTUALDATE` collapses away. See
-  [World Economic Outlook](https://docs.one.org/tools/imf-reader/weo/#series-metadata).
+  [World Economic Outlook](https://developmentfinance.org/docs/tools/imf-reader/weo#series-metadata).
 - `fetch_data_with_metadata` reads the series-metadata sidecar twice per call, which left two ways
   for its two halves to disagree. It now pins its metadata leg to the exact `FlowRef` that served
   its observations leg, instead of resolving the release label a second time. The flow mapping is
@@ -62,7 +62,7 @@
 - Removed the Codecov integration.
 - The documentation site moved from Sphinx to MkDocs and was rewritten, and now covers WEO release
   coverage, the SDR argument-order trap, and the caching layer. It is published at
-  <https://docs.one.org/tools/imf-reader/>.
+  <https://developmentfinance.org/docs/tools/imf-reader>.
 
 ### Corrected data
 
@@ -82,7 +82,7 @@
   version segment across this change, so a cache entry written before this fix can otherwise keep
   serving the mislabelled data. If you have an extract saved to disk and labelled "October 2025",
   re-pull it. It may hold the April 2026 release under the wrong label. See
-  [Caching](https://docs.one.org/tools/imf-reader/caching/) for detail.
+  [Caching](https://developmentfinance.org/docs/tools/imf-reader/caching) for detail.
 
 ### New and repaired columns
 
