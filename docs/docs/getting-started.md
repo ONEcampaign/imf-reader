@@ -155,6 +155,8 @@ logging.getLogger("imf_reader").setLevel(logging.INFO)
 
 Use `logging.DEBUG` for more detail, such as the lookup of the latest SDR month.
 
+WEO bulk downloads log their "Fetching" line through the caching library, under the `readerkit` logger, so set `logging.getLogger("readerkit").setLevel(logging.INFO)` as well to see it.
+
 ## Next steps
 
 - [World Economic Outlook](weo.md) - the full WEO reference, including indicator lookup and
