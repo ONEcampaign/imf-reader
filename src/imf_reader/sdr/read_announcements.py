@@ -6,14 +6,13 @@ info: https://www.imf.org/en/About/Factsheets/Sheets/2023/special-drawing-rights
 """
 
 import calendar
-import logging
 from datetime import datetime, timedelta
 
 import pandas as pd
 from bs4 import BeautifulSoup
 
 from imf_reader.cache.dataframe import dataframe_cache
-from imf_reader.config import logger
+from imf_reader.config import _logger as logger
 from imf_reader.utils import make_request
 
 BASE_URL = "https://www.imf.org/external/np/fin/tad/"
@@ -92,7 +91,7 @@ def fetch_latest_allocations_holdings_date() -> tuple[int, int]:
         tuple[int, int]: A tuple containing the year and month of the latest SDR data.
     """
 
-    logger.info("Fetching latest date")
+    logger.debug("Fetching latest date")
 
     response = make_request(MAIN_PAGE_URL)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -141,11 +140,7 @@ def fetch_allocations_holdings(date: tuple[int, int] | None = None) -> pd.DataFr
     if date is None:
         date = fetch_latest_allocations_holdings_date()
     else:
-        # Temporarily disable logging while calling fetch_latest_allocations_holdings_date()
-        original_logger_level = logger.level
-        logger.setLevel(logging.WARNING)
         latest_date = fetch_latest_allocations_holdings_date()
-        logger.setLevel(original_logger_level)
 
         # (year, month) tuples order the same way the dates they stand for do,
         # so the comparison needs no datetime construction.

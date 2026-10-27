@@ -7,7 +7,8 @@ from zipfile import ZipFile
 
 import pandas as pd
 
-from imf_reader.config import UnexpectedFileError, logger
+from imf_reader.config import UnexpectedFileError
+from imf_reader.config import _logger as logger
 
 # columns to map to labels and the schema element to look them up
 SDMX_FIELDS_TO_MAP = {

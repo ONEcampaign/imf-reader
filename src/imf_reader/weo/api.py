@@ -11,7 +11,8 @@ from imf_reader.cache.dataframe import dataframe_cache
 from imf_reader.cache.legacy import (
     _legacy_weo_api_clear_cache as clear_cache,  # noqa: F401
 )
-from imf_reader.config import DataflowDiscoveryError, VersionNotAvailableError, logger
+from imf_reader.config import DataflowDiscoveryError, VersionNotAvailableError
+from imf_reader.config import _logger as logger
 from imf_reader.utils import make_get_request
 from imf_reader.weo import ValidMonths, Version
 from imf_reader.weo._shared import _drop_empty_observations

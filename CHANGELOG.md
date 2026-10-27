@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.3.0 (2026-10-27)
+
+- `imf_reader` no longer configures logging. It used to attach a stream handler to its logger, set
+  the level to INFO and stop records propagating, which overrode whatever the importing application
+  had set up. Every logger now sits under `imf_reader` with no handler and no level, and records
+  propagate to the root logger, so an application that configures nothing sees only warnings and
+  errors. To see progress messages again, call `logging.basicConfig()` and then
+  `logging.getLogger("imf_reader").setLevel(logging.INFO)`. Configuring `imf_reader` with
+  `dictConfig` or `fileConfig` now works as it does for any other library.
+- The SDR "Fetching latest date" message, logged when `sdr.fetch_allocations_holdings()` looks up
+  the latest month, is now DEBUG. `fetch_allocations_holdings` used to lower its logger to WARNING
+  around that lookup to hide the message, which changed the level for every other caller at the
+  same time. It no longer touches logger levels.
+- `imf_reader.config.logger` is deprecated and will be removed in 3.0. Importing it emits a
+  `DeprecationWarning`. Configure `logging.getLogger("imf_reader")` instead.
+- The WEO and SDR modules log through a logger named `imf_reader.config` until 3.0, so their
+  records carry that name and code that configures `imf_reader.config` by name keeps working. In
+  3.0 each module logs under its own name, such as `imf_reader.weo.api`. Configuring `imf_reader`
+  covers both names. Cache messages already log under `imf_reader.cache.dataframe`.
+
 ## v2.2.0 (2026-08-14)
 
 - Three new functions read series-level metadata for a WEO release, one row per series, keyed on

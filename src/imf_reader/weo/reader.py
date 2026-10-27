@@ -10,8 +10,8 @@ from imf_reader.config import (
     DataflowDiscoveryError,
     NoDataError,
     VersionNotAvailableError,
-    logger,
 )
+from imf_reader.config import _logger as logger
 from imf_reader.weo import Version
 from imf_reader.weo.api import (
     SERIES_METADATA_JOIN_KEYS,
