@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.0 (2026-10-27)
+
+- `imf_reader` leaves logging configuration to the application. Its loggers propagate to the root
+  logger with no handler or level set, so an application that configures nothing sees only warnings
+  and errors. To see progress messages, call `logging.basicConfig()` and then
+  `logging.getLogger("imf_reader").setLevel(logging.INFO)`.
+- The SDR "Fetching latest date" message is now DEBUG.
+- `imf_reader.config.logger` is deprecated and will be removed in 3.0. Until then, WEO and SDR
+  modules log through the `imf_reader.config` logger, so code that configures it by name keeps
+  working.
+
 ## v2.2.0 (2026-08-14)
 
 - Three new functions read series-level metadata for a WEO release, one row per series, keyed on

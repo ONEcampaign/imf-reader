@@ -1,5 +1,5 @@
 ---
-description: Install imf-reader, fetch and filter a WEO release, check which release you got, and fetch SDR exchange rates and holdings.
+description: Install imf-reader, fetch and filter a WEO release, check which release you got, fetch SDR exchange rates and holdings, and turn on progress messages.
 ---
 
 # Getting started
@@ -141,6 +141,21 @@ available. Pass a specific month as a `(year, month)` tuple.
 !!! warning
 
     SDR and WEO order their date arguments differently. `sdr.fetch_allocations_holdings((2021, 4))` takes `(year, month)` as integers, for April 2021. `weo.fetch_data(("April", 2024))` takes `(month, year)`, with the month as a name. Check which module you're calling before passing a tuple.
+
+## See progress messages
+
+`imf-reader` leaves logging to your application. With no configuration, only warnings and errors appear. To see progress messages, set a level on the `imf_reader` logger:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger("imf_reader").setLevel(logging.INFO)
+```
+
+Use `logging.DEBUG` for more detail, such as the lookup of the latest SDR month.
+
+WEO bulk downloads log their "Fetching" line through the caching library, under the `readerkit` logger, so set `logging.getLogger("readerkit").setLevel(logging.INFO)` as well to see it.
 
 ## Next steps
 

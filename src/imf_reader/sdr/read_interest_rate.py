@@ -6,7 +6,7 @@ from datetime import timedelta
 import pandas as pd
 
 from imf_reader.cache.dataframe import dataframe_cache
-from imf_reader.config import logger
+from imf_reader.config import _logger as logger
 from imf_reader.utils import make_post_request
 
 BASE_URL: str = "https://www.imf.org/external/np/fin/data/sdr_ir.aspx"

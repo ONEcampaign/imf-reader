@@ -1,6 +1,7 @@
 """Configuration for the IMF reader."""
 
 import logging
+import warnings
 
 
 class NoDataError(Exception):
@@ -54,17 +55,17 @@ class BulkPayloadCorruptError(Exception):
         super().__init__(message)
 
 
-# Configure Logging
-logger = logging.getLogger(__name__)
-shell_handler = logging.StreamHandler()  # Create terminal handler
-logger.setLevel(logging.INFO)  # Set levels for the logger, shell and file
-shell_handler.setLevel(logging.INFO)  # Set levels for the logger, shell and file
+# Named after this module until 3.0 so code that configures `imf_reader.config` keeps working.
+_logger = logging.getLogger(__name__)
 
-# Format the outputs   "%(levelname)s (%(asctime)s): %(message)s"
-fmt_file = "%(levelname)s: %(message)s"
-fmt_shell = "%(levelname)s: %(message)s"
 
-shell_formatter = logging.Formatter(fmt_shell)  # Create formatters
-shell_handler.setFormatter(shell_formatter)  # Add formatters to handlers
-logger.addHandler(shell_handler)  # Add handlers to the logger
-logger.propagate = False  # Prevent duplicate logs when user configures root logger
+def __getattr__(name: str) -> logging.Logger:
+    if name == "logger":
+        warnings.warn(
+            "imf_reader.config.logger is deprecated and will be removed in 3.0; "
+            'configure logging.getLogger("imf_reader") instead.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _logger
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -8,7 +8,8 @@ import requests
 from readerkit import ArtifactCorruptError, FetchContext, TransportError, bulk_fetcher
 
 from imf_reader.cache.config import get_artifact_cache, get_uncached_session
-from imf_reader.config import BulkPayloadCorruptError, NoDataError, logger
+from imf_reader.config import BulkPayloadCorruptError, NoDataError
+from imf_reader.config import _logger as logger
 from imf_reader.weo import Version
 
 # Root of the media library that serves the published SDMX bulk zips. The IMF's

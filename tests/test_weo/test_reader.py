@@ -268,7 +268,7 @@ def test_fetch_data_explicit_version_falls_back_when_catalogue_unusable(
 @patch("imf_reader.weo.reader._fetch")
 @patch("imf_reader.weo.reader._get_weo_data_with_ref")
 def test_fetch_data_explicit_version_fallback_logs_a_warning(
-    mock_get_weo_data_with_ref, mock_fetch, caplog, monkeypatch
+    mock_get_weo_data_with_ref, mock_fetch, caplog
 ):
     """The catalogue-unusable fallback keeps the caller's label correct, so its
     return value alone shows nothing. It must still carry a signal above INFO:
@@ -280,23 +280,14 @@ def test_fetch_data_explicit_version_fallback_logs_a_warning(
     )
     mock_fetch.return_value = pd.DataFrame({"column1": [1], "column2": [2]})
 
-    # config.py turns propagation off on this logger so a caller configuring
-    # the root logger does not get duplicate lines. caplog attaches to the
-    # root, so it is turned back on for the duration of this test. Capturing
-    # by logger name alone works only on pytest 9.1 and up.
-    imf_logger = logging.getLogger("imf_reader.config")
-    monkeypatch.setattr(imf_logger, "propagate", True)
-
-    with caplog.at_level(logging.WARNING, logger="imf_reader.config"):
+    with caplog.at_level(logging.WARNING):
         reader.fetch_data(("April", 2020))
 
-    # Compared as a set of distinct messages, because pytest 9.1 records the
-    # same line twice (once directly, once through the propagation enabled
-    # above) while 9.0 records it once. What this pins is that the fallback
-    # emits one warning, not how many handlers observed it.
-    messages = {r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING}
-    assert len(messages) == 1
-    message = messages.pop()
+    warning_records = [
+        record for record in caplog.records if record.levelno >= logging.WARNING
+    ]
+    assert len(warning_records) == 1
+    message = warning_records[0].getMessage()
     assert "April" in message
     assert "2020" in message
     assert "DataflowDiscoveryError" in message
