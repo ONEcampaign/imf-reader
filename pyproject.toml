@@ -38,8 +38,8 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://docs.one.org/tools/imf-reader/"
-documentation = "https://docs.one.org/tools/imf-reader/"
+homepage = "https://developmentfinance.org/docs/tools/imf-reader"
+documentation = "https://developmentfinance.org/docs/tools/imf-reader"
 repository = "https://github.com/ONEcampaign/imf-reader"
 issues = "https://github.com/ONEcampaign/imf-reader/issues"
 
